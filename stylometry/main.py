@@ -34,7 +34,7 @@ step_size = 300
 
 invalid_words = ['dummyword']
 
-# For classification tests, split data into training and test corpus (classifier will train and evaluate on training corpus, 
+# For classification tests, split data into training and test corpus (classifier will train and evaluate on training corpus,
 # and predict on new test corpus)
 
 test_train_split = 'yes'
@@ -44,35 +44,35 @@ test_dict = {'AnsLaon': 'Apocalypsim'}
 
 if __name__ == "__main__":
 
-	authors, titles, texts, raw_counts, features = vectorize(folder_location, sample_length, feat_amount, invalid_words)
-	zscore_vectors = zscore_delta(raw_counts, authors, titles, test_dict, test_train_split)
-	tfidf_vectors = tfidf_vectorizer(raw_counts, authors, titles, features, test_dict, test_train_split)
-	distances, indices = knn(tfidf_vectors, authors, titles, nearest_neighbors)
-	grid_doc_vectors, used_features, best_feat_amount = gridsearch_clf(tfidf_vectors, authors, titles, features, test_dict, feat_amount)
+    authors, titles, texts, raw_counts, features = vectorize(folder_location, sample_length, feat_amount, invalid_words)
+    zscore_vectors = zscore_delta(raw_counts, authors, titles, test_dict, test_train_split)
+    tfidf_vectors = tfidf_vectorizer(raw_counts, authors, titles, features, test_dict, test_train_split)
+    distances, indices = knn(tfidf_vectors, authors, titles, nearest_neighbors)
+    grid_doc_vectors, used_features, best_feat_amount = gridsearch_clf(tfidf_vectors, authors, titles, features, test_dict, feat_amount)
 
-	#principal_components_analysis(grid_doc_vectors, authors, titles, used_features, show_samples='yes', show_loadings='no')
-	#dendrogram(zscore_vectors, authors, titles, features)
-	#plot_loadings(authors, titles, raw_counts, zscore_vectors, features, feat_amount, "Bernard_vester_freq")
-	#plot_frequencies(authors, titles, raw_counts, features, feat_amount, "Bernard_vester_freq")
-	#heatmap(zscore_vectors, authors, titles, features)
-	#gephi_networks(authors, titles, tfidf_vectors, nearest_neighbors)
-	#deviant_cwords(folder_location)
-	#rolling_delta(sample_length, feat_amount, invalid_words, step_size)
+    #principal_components_analysis(grid_doc_vectors, authors, titles, used_features, show_samples='yes', show_loadings='no')
+    #dendrogram(zscore_vectors, authors, titles, features)
+    #plot_loadings(authors, titles, raw_counts, zscore_vectors, features, feat_amount, "Bernard_vester_freq")
+    #plot_frequencies(authors, titles, raw_counts, features, feat_amount, "Bernard_vester_freq")
+    #heatmap(zscore_vectors, authors, titles, features)
+    #gephi_networks(authors, titles, tfidf_vectors, nearest_neighbors)
+    #deviant_cwords(folder_location)
+    #rolling_delta(sample_length, feat_amount, invalid_words, step_size)
 
-	# Write data to CSV file:
+    # Write data to CSV file:
 
-	"""newcsv = open("/Users/jedgusse/stylofactory/output/text_output/data_exp1.csv", "w")
+    """newcsv = open("/Users/jedgusse/stylofactory/output/text_output/data_exp1.csv", "w")
 
-	newcsv.write("author, title, ")
+    newcsv.write("author, title, ")
 
-	for feature in features:
-		newcsv.write("{}, ".format(feature))
-	newcsv.write("\n")
+    for feature in features:
+    newcsv.write("{}, ".format(feature))
+    newcsv.write("\n")
 
-	for author, title, raw_vector in zip(authors, titles, raw_counts):
-		newcsv.write(author + ", " + title + ", ")
-		for number in raw_vector:
-			newcsv.write(str(number) + ", ")
-		newcsv.write("\n")"""
+    for author, title, raw_vector in zip(authors, titles, raw_counts):
+    newcsv.write(author + ", " + title + ", ")
+    for number in raw_vector:
+        newcsv.write(str(number) + ", ")
+    newcsv.write("\n")"""
 
 
