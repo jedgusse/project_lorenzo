@@ -27,7 +27,6 @@ class DataReader(object):
         data = list(self.reader(include=self.foreground_authors))
 
         authors = [d.author for d in data]
-        print(authors)
         titles = [d.title for d in data]
         sentences = [d.sentences for d in data]
 
@@ -55,3 +54,5 @@ class DataReader(object):
 if __name__ == '__main__':
     foreground_authors = ('Tertullianus', 'Hieronymus Stridonensis')
     reader = DataReader(name='PL', foreground_authors=foreground_authors)
+    gen, disc, test, = reader.foreground_splits()
+    authors, sents, titles = disc
