@@ -4,7 +4,8 @@ import os
 import json
 import string
 import functools
-from xml.etree import ElementTree
+# from xml.etree import ElementTree
+from lxml import etree
 from collections import namedtuple
 
 from cltk.tokenize.sentence import TokenizeSentence
@@ -16,7 +17,7 @@ def _fetch_latin_models():
     CorpusImporter('latin').import_corpus('latin_models_cltk')
 
 
-PARENT_FOLDER = '../data/'
+PARENT_FOLDER = './data/'
 DOC = namedtuple('DOC', ['author', 'title', 'sentences', 'nb_words'])
 try:
     CLTK_TOK = TokenizeSentence('latin')
@@ -109,9 +110,9 @@ def patrologia_reader(parent=PARENT_FOLDER, exclude=(), include=(),
     for f in os.listdir(os.path.join(parent, subpath)):
         with open(os.path.join(parent, subpath, f), 'r+') as inf:
             string = inf.read()
-            root = ElementTree.fromstring(
+            root = etree.fromstring(
                 # get rid of rogue xml
-                string.replace('<unknown>', 'unknown'))
+                string.replace('<unknown>', 'unknown').encode('utf-8'))
             author, title = root.attrib['auteur'], root.attrib['titre']
             nb_words = root.attrib['nb_tokens']
             if (exclude and author not in exclude) or \
