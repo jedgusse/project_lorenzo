@@ -17,7 +17,7 @@ def _fetch_latin_models():
     CorpusImporter('latin').import_corpus('latin_models_cltk')
 
 
-PARENT_FOLDER = './data/'
+ROOT_FOLDER = './data/'
 DOC = namedtuple('DOC', ['author', 'title', 'sentences', 'nb_words'])
 try:
     CLTK_TOK = TokenizeSentence('latin')
@@ -42,19 +42,22 @@ def packhum_sentence_tokenizer(doc):
     return CLTK_TOK.tokenize_sentences(doc)
 
 
-def packhum_reader(parent=PARENT_FOLDER, exclude=(), include=()):
-    with open(os.path.join(parent, 'packhum/packhum.json'), 'r+') as inf:
-        for line in inf:
-            obj = json.loads(line.strip())
-            author, title = obj['author'], obj['work']
-            if (exclude and author not in exclude) or \
-               (include and author in include) or \
-               (not include and not exclude):
-                sentences = packhum_sentence_tokenizer(obj['text'])
-                yield DOC(author=author,
-                          title=title,
-                          nb_words=sum(len(s.split()) for s in sentences),
-                          sentences=sentences)
+def packhum_reader(root=ROOT_FOLDER, exclude=(), include=(),
+                   subpath='packhum/merged'):
+    for f in os.listdir(os.path.join(root, subpath)):
+        author = f.split('.')[0].replace('_', ' ')
+        if (exclude and author not in exclude) or \
+           (include and author in include) or \
+           (not include and not exclude):
+            with open(os.path.join(root, subpath, f), 'r+') as inf:
+                work = json.load(inf)
+            title = work['author']
+            sentences = [s for page in work['pages']
+                         for s in packhum_sentence_tokenizer(page['text'])]
+            yield DOC(author=author,
+                      title=title,
+                      nb_words=sum(len(s.split()) for s in sentences),
+                      sentences=sentences)
 
 
 def pl_sentence_tokenizer(doc):
@@ -105,21 +108,22 @@ def pl_sentence_tokenizer(doc):
     return out
 
 
-def patrologia_reader(parent=PARENT_FOLDER, exclude=(), include=(),
-                      subpath='patrologia_rnr'):
-    for f in os.listdir(os.path.join(parent, subpath)):
-        with open(os.path.join(parent, subpath, f), 'r+') as inf:
-            string = inf.read()
-            root = etree.fromstring(
+def patrologia_reader(root=ROOT_FOLDER, exclude=(), include=(),
+                      subpath='pl'):
+    for f in os.listdir(os.path.join(root, subpath)):
+        author = f.split('.')[0].replace('_', ' ')
+        if (exclude and author not in exclude) or \
+           (include and author in include) or \
+           (not include and not exclude):
+            with open(os.path.join(root, subpath, f), 'r+') as inf:
+                s = inf.read()
+            tree_root = etree.fromstring(
                 # get rid of rogue xml
-                string.replace('<unknown>', 'unknown').encode('utf-8'))
-            author, title = root.attrib['auteur'], root.attrib['titre']
-            nb_words = root.attrib['nb_tokens']
-            if (exclude and author not in exclude) or \
-               (include and author in include) or \
-               (not include and not exclude):
-                sentences = pl_sentence_tokenizer(root)
-                yield DOC(author=author,
-                          title=title,
-                          nb_words=nb_words,
-                          sentences=sentences)
+                s.replace('<unknown>', 'unknown').encode('utf-8'))
+            title = tree_root.attrib['titre']
+            nb_words = tree_root.attrib['nb_tokens']
+            sentences = pl_sentence_tokenizer(tree_root)
+            yield DOC(author=author,
+                      title=title,
+                      nb_words=nb_words,
+                      sentences=sentences)
