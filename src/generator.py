@@ -71,6 +71,7 @@ class LMGenerator(LM):
             score += scores[0]
             return sents, words, score
 
+        sents, words, score = generate_sent(sents, words, score, **kwargs)
         seed_text = None
         while words < max_words:
             kwargs.update({'seed_text': seed_text})  # use user seed only once
