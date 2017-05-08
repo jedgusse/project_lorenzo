@@ -12,6 +12,17 @@ from seqmod.misc.dataset import BlockDataset, Dict
 
 
 class LMGenerator(LM):
+    """
+    Wrapper training function
+
+    Parameters
+    ===========
+    examples: iterable of sentences (lists of strings)
+    d: fitted Dict object,
+        use fit_vocab to get one. It should be the same that was used to
+        estimate the vocab param in the constructor. Note that fit_vocab
+        is a static method and doesn't need object initialization.
+    """
     def train(self,
               # dataset parameters
               examples, d, batch_size, bptt, epochs, split=0.1,
@@ -22,17 +33,6 @@ class LMGenerator(LM):
               start_decay_at=15, decay_every=5, lr_decay=0.8,
               # other parameters
               gpu=False):
-        """
-        Wrapper training function
-
-        Parameters
-        ===========
-        examples: iterable of sentences (lists of strings)
-        d: fitted Dict object,
-            use fit_vocab to get one. It should be the same that was used to
-            estimate the vocab param in the constructor. Note that fit_vocab
-            is a static method and doesn't need object initialization.
-        """
         self.d = d
         self.examples = examples
         train, valid = BlockDataset(
