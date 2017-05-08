@@ -54,7 +54,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_path', default='data')
-    parser.add_argument('--packhum_target', default='packhum_post')
+    parser.add_argument('--packhum_target', default='packhum/merged')
     parser.add_argument('--pl_target', default='pl')
     args = parser.parse_args()
 
