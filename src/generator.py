@@ -11,28 +11,64 @@ from seqmod.misc.loggers import StdLogger
 from seqmod.misc.dataset import BlockDataset, Dict
 
 
+def make_generator_hook(max_words=100):
+
+    def hook(trainer, epoch, batch_num, checkpoint):
+        trainer.model.eval()
+        trainer.log("info", "Generating %d-words long doc..." % max_words)
+        doc, score = trainer.model.generate_doc(max_words=max_words)
+        trainer.log("info", '\n***' + ''.join(doc) + "\n***")
+        trainer.model.train()
+
+    return hook
+
+
 class LMGenerator(LM):
     """
-    Wrapper training function
+    Wrapper training and generating class for LM
 
-    Parameters
+    Parameters:
     ===========
-    examples: iterable of sentences (lists of strings)
-    d: fitted Dict object,
-        use fit_vocab to get one. It should be the same that was used to
-        estimate the vocab param in the constructor. Note that fit_vocab
-        is a static method and doesn't need object initialization.
+    - vocab: int, vocabulary size.
+    - emb_dim: int, embedding size,
+        This value has to be equal to hid_dim if tie_weights is True and
+        project_on_tied_weights is False, otherwise input and output
+        embedding dimensions wouldn't match and weights cannot be tied.
+    - hid_dim: int, hidden dimension of the RNN.
+    - num_layers: int, number of layers of the RNN.
+    - cell: str, one of GRU, LSTM, RNN.
+    - bias: bool, whether to include bias in the RNN.
+    - dropout: float, amount of dropout to apply in between layers.
+    - tie_weights: bool, whether to tie input and output embedding layers.
+        In case of unequal emb_dim and hid_dim values a linear project layer
+        will be inserted after the RNN to match back to the embedding dim
+    - att_dim: int, whether to add an attention module of dimension `att_dim`
+        over the prefix. No attention will be added if att_dim is None or 0
+    - deepout_layers: int, whether to add deep output after hidden layer and
+        before output projection layer. No deep output will be added if
+        deepout_layers is 0 or None.
+    - deepout_act: str, activation function for the deepout module in camelcase
     """
-    def train(self,
-              # dataset parameters
-              examples, d, batch_size, bptt, epochs, split=0.1,
-              # dict parameters
-              max_size=None, min_freq=1,
-              # optimizer parameters
-              optim_method='SGD', lr=1., max_norm=5.,
-              start_decay_at=15, decay_every=5, lr_decay=0.8,
-              # other parameters
-              gpu=False):
+    def fit(self,
+            # dataset parameters
+            examples, d, batch_size, bptt, epochs, split=0.1,
+            # optimizer parameters
+            optim_method='SGD', lr=1., max_norm=5.,
+            start_decay_at=15, decay_every=5, lr_decay=0.8,
+            # other parameters
+            gpu=False):
+        """
+        Parameters
+        ===========
+        examples : iterable of sentences (lists of strings)
+        d : fitted Dict object,
+            Use fit_vocab to get one. It should be the same that was used to
+            estimate the vocab param in the constructor. Note that fit_vocab
+            is a static method and doesn't need object initialization
+        batch_size : int
+        bptt : int, Backprop through time (max unrolling value)
+        epochs : int
+        """
         self.d = d
         self.examples = examples
         train, valid = BlockDataset(
@@ -44,9 +80,12 @@ class LMGenerator(LM):
             lr_decay=lr_decay, start_decay_at=start_decay_at,
             decay_every=decay_every)
         trainer = LMTrainer(
-            self, {'train': train, 'valid': valid}, self.d, criterion, optim)
+            self, {'train': train, 'valid': valid}, criterion, optim)
         trainer.add_loggers(StdLogger())
-        trainer.train(epochs)
+        checkpoints_per_epoch = len(train) // 10
+        hooks_per_epoch = len(train) // (checkpoints_per_epoch * 1)
+        trainer.add_hook(make_generator_hook(), hooks_per_epoch)
+        trainer.train(epochs, checkpoint=checkpoints_per_epoch)
 
     @staticmethod
     def fit_vocab(examples, max_size=None, min_freq=1):
@@ -55,29 +94,57 @@ class LMGenerator(LM):
         return d
 
     def copy(self):
-        self.cpu()              # ensure model is in cpu to avoid exploding gpu
+        self.cpu()     # ensure model is in cpu to avoid exploding gpu
         return copy.deepcopy(self)
 
     def generate_doc(self, max_words=5000, reset_every=10, **kwargs):
-        sents, words, score = [], 0, 0
 
-        def generate_sent(sents, words, score, **kwargs):
-            scores, hyps = self.model.generate(
-                self.d, max_seq_len=100, **kwargs)
-            sent = ''.join([self.d.vocab[c] for c in hyps[0]])
-            sent = sent.replace(self.d.get_eos(), '\n')
-            sents.append(sent)
-            words += len(sent.split())
-            score += scores[0]
-            return sents, words, score
+        def generate_sent(**kwargs):
+            scores, hyps = self.generate(
+                self.d, max_seq_len=100, **kwargs)  # generate
+            sent = ''.join(self.d.vocab[c] for c in hyps[0])  # decode ints
+            sent = sent.replace(self.d.eos_token, '')  # remove <eos>
+            return sent, len(sent.split()), scores[0]
 
-        sents, words, score = generate_sent(sents, words, score, **kwargs)
-        seed_text = None
+        sent, words, score = generate_sent(**kwargs)
+        seed_text, doc = None, [sent]
         while words < max_words:
+            print("Generated [%d/%d] words" % (words, max_words))
             kwargs.update({'seed_text': seed_text})  # use user seed only once
-            sents, words, score = generate_sent(sents, words, score, **kwargs)
-            if len(sents) % reset_every == 0:
+            sent, sent_words, sent_score = generate_sent(**kwargs)
+            doc.append(sent)
+            words += sent_words
+            score += sent_score
+            if len(doc) % reset_every == 0:
                 # reset seed to randomly picked training sentence
-                seed_text = random.randint(0, len(self.examples) - 1)
+                sent_idx = random.randint(0, len(self.examples) - 1)
+                seed_text = self.examples[sent_idx]
 
-        return sents, score
+        return doc, score
+
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    # train
+    parser.add_argument('--batch_size', default=50, type=int)
+    parser.add_argument('--bptt', default=50, type=int)
+    parser.add_argument('--epochs', default=10, type=int)
+    # model
+    parser.add_argument('--emb_dim', default=24, type=int)
+    parser.add_argument('--hid_dim', default=200, type=int)
+    parser.add_argument('--num_layers', default=2, type=int)
+    args = parser.parse_args()
+
+    from data import DataReader
+    foreground_authors = ('Tertullianus', 'Hieronymus Stridonensis')
+    reader = DataReader(name='PL', foreground_authors=foreground_authors)
+    train, _, _ = reader.foreground_splits()
+    _, _, X_train = train
+    examples = [sent for doc in X_train for sent in doc]
+    fitted_d = LMGenerator.fit_vocab(examples)
+    vocab = len(fitted_d)
+    generator = LMGenerator(vocab, args.emb_dim, args.hid_dim, args.num_layers)
+    generator.fit(examples, fitted_d, args.batch_size, args.bptt, args.epochs)
+    generator.eval()
+    print(generator.generate_doc(max_words=500))
