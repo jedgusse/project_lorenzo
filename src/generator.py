@@ -17,7 +17,7 @@ def make_generator_hook(max_words=100):
         trainer.model.eval()
         trainer.log("info", "Generating %d-words long doc..." % max_words)
         doc, score = trainer.model.generate_doc(max_words=max_words)
-        trainer.log("info", '\n***' + ''.join(doc) + "\n***")
+        trainer.log("info", '\n***\n' + '\n'.join(doc) + "\n***")
         trainer.model.train()
 
     return hook
@@ -70,6 +70,7 @@ class LMGenerator(LM):
         epochs : int
         """
         self.d = d
+        self.gpu = gpu
         self.examples = examples
         train, valid = BlockDataset(
             examples, self.d, batch_size, bptt, gpu=gpu).splits(
@@ -85,7 +86,9 @@ class LMGenerator(LM):
         checkpoints_per_epoch = len(train) // 10
         hooks_per_epoch = len(train) // (checkpoints_per_epoch * 1)
         trainer.add_hook(make_generator_hook(), hooks_per_epoch)
-        trainer.train(epochs, checkpoint=checkpoints_per_epoch)
+        if gpu:
+            self.cuda()
+        trainer.train(epochs, checkpoint=checkpoints_per_epoch, gpu=gpu)
 
     @staticmethod
     def fit_vocab(examples, max_size=None, min_freq=1):
@@ -101,7 +104,7 @@ class LMGenerator(LM):
 
         def generate_sent(**kwargs):
             scores, hyps = self.generate(
-                self.d, max_seq_len=100, **kwargs)  # generate
+                self.d, max_seq_len=100, gpu=self.gpu, **kwargs)  # generate
             sent = ''.join(self.d.vocab[c] for c in hyps[0])  # decode ints
             sent = sent.replace(self.d.eos_token, '')  # remove <eos>
             return sent, len(sent.split()), scores[0]
@@ -130,6 +133,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', default=50, type=int)
     parser.add_argument('--bptt', default=50, type=int)
     parser.add_argument('--epochs', default=10, type=int)
+    parser.add_argument('--gpu', action='store_true')
     # model
     parser.add_argument('--emb_dim', default=24, type=int)
     parser.add_argument('--hid_dim', default=200, type=int)
@@ -145,6 +149,9 @@ if __name__ == '__main__':
     fitted_d = LMGenerator.fit_vocab(examples)
     vocab = len(fitted_d)
     generator = LMGenerator(vocab, args.emb_dim, args.hid_dim, args.num_layers)
-    generator.fit(examples, fitted_d, args.batch_size, args.bptt, args.epochs)
+    generator.fit(examples, fitted_d, args.batch_size, args.bptt, args.epochs,
+                  gpu=args.gpu)
     generator.eval()
-    print(generator.generate_doc(max_words=500))
+    doc, score = generator.generate_doc(max_words=500)
+    print()
+    print('\n'.join(doc))
