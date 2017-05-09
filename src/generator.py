@@ -125,16 +125,15 @@ class LMGenerator(LM):
                 score, hyp = scores[0], hyps[0]
             sent = ''.join(self.d.vocab[c] for c in hyp)
             # sent = sent.replace(self.d.eos_token, '')
-            return sent, len(sent.split()), scores
+            return sent, score
 
-        sent, words, score = generate_sent(max_tries=max_tries, **kwargs)
-        seed_text, doc = None, [sent]
+        sent, score = generate_sent(max_tries=max_tries, **kwargs)
+        seed_text, doc, words = None, [sent], 0
         while words < max_words:
             kwargs.update({'seed_text': seed_text})  # use user seed only once
-            sent, sent_words, sent_score = generate_sent(
-                max_tries=max_tries, **kwargs)
+            sent, sent_score = generate_sent(max_tries=max_tries, **kwargs)
             doc.append(sent)
-            words += sent_words
+            words += len(sent.split())
             score += sent_score
             if len(doc) % reset_every == 0:
                 # reset seed to randomly picked training sentence
