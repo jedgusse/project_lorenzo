@@ -4,9 +4,9 @@ import os
 import json
 import string
 import functools
-# from xml.etree import ElementTree
+from collections import namedtuple, defaultdict
+
 from lxml import etree
-from collections import namedtuple
 
 from cltk.tokenize.sentence import TokenizeSentence
 
@@ -46,7 +46,7 @@ def packhum_sentence_tokenizer(doc):
 
 
 def packhum_reader(root=ROOT_FOLDER, exclude=(), include=(),
-                   subpath='packhum/merged'):
+                   subpath='packhum/merged', min_sent_len=5):
     """
     Parameters
     ===========
@@ -66,7 +66,8 @@ def packhum_reader(root=ROOT_FOLDER, exclude=(), include=(),
                 work = json.load(inf)
             title = work['author']
             sentences = [s for page in work['pages']
-                         for s in packhum_sentence_tokenizer(page['text'])]
+                         for s in packhum_sentence_tokenizer(page['text'])
+                         if len(s.split()) > min_sent_len]
             yield DOC(author=author,
                       title=title,
                       nb_words=sum(len(s.split()) for s in sentences),
@@ -157,3 +158,35 @@ def patrologia_reader(root=ROOT_FOLDER, exclude=(), include=(),
                       title=title,
                       nb_words=nb_words,
                       sentences=sentences)
+
+
+if __name__ == '__main__':
+    from argparse import ArgumentParser
+    parser = ArgumentParser()
+    parser.add_argument('--min_sent_len', default=5, type=int)
+    args = parser.parse_args()
+
+    def word_counts(docs):
+        out = defaultdict(lambda: defaultdict(int))
+        for doc in docs:
+            out[doc.author][doc.title] += int(doc.nb_words)
+        return out
+
+    def print_wc(wc, pad=10):
+        max_author = max(len(a) for a in wc)
+        print('{author},{mean_words},{words},{docs}'.format(
+            author='author'.replace('.', ' ').ljust(max_author, ' '),
+            mean_words='mean_words'.ljust(pad, ' '),
+            words='words'.ljust(pad, ' '),
+            docs='docs'.ljust(pad, ' ')))
+        for author in wc:
+            words = sum(wc[author][d] for d in wc[author])
+            docs = len(wc[author])
+            print('{author},{mean_words},{words},{docs}'.format(
+                author=author.replace('.', ' ').ljust(max_author, ' '),
+                mean_words=str(words/docs).ljust(pad, ' '),
+                words=str(words).ljust(pad, ' '),
+                docs=str(docs).ljust(pad, ' ')))
+
+    print_wc(word_counts(patrologia_reader(min_sent_len=args.min_sent_len)))
+    print_wc(word_counts(packhum_reader(min_sent_len=args.min_sent_len)))
