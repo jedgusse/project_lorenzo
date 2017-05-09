@@ -26,11 +26,14 @@ except:
 
 
 def detokenizer(tokens):
+    post_punc, pre_punc = {';', '.', ',', ':', '?', '!', ')'}, {'('}
     def func(acc, x):
-        if x not in string.punctuation:
-            return acc + ' ' + x
-        else:
+        if x in post_punc:
             return acc + x
+        if acc[-1] in pre_punc:
+                return acc + x
+        else:
+            return acc + ' ' + x
     return functools.reduce(func, tokens)
 
 
@@ -44,6 +47,16 @@ def packhum_sentence_tokenizer(doc):
 
 def packhum_reader(root=ROOT_FOLDER, exclude=(), include=(),
                    subpath='packhum/merged'):
+    """
+    Parameters
+    ===========
+
+    root : str, top folder of the processed data
+    exclude : tuple of str, authors to skip when reading. Note that
+        author names are determined by the file name substituting 
+        underscores `_` with blankspaces ` `.
+    indlude : tuple of str, authors to include when reading.
+    """
     for f in os.listdir(os.path.join(root, subpath)):
         author = f.split('.')[0].replace('_', ' ')
         if (exclude and author not in exclude) or \
@@ -119,6 +132,13 @@ def pl_sentence_tokenizer(doc, min_sent_len=5):
 
 def patrologia_reader(root=ROOT_FOLDER, exclude=(), include=(),
                       subpath='pl', min_sent_len=5):
+    """
+    root : str, top folder of the processed data
+    exclude : tuple of str, authors to skip when reading. Note that
+        author names are determined by the file name substituting 
+        underscores `_` with blankspaces ` `.
+    indlude : tuple of str, authors to include when reading.
+    """
     for f in os.listdir(os.path.join(root, subpath)):
         author = f.split('.')[0].replace('_', ' ')
         if (exclude and author not in exclude) or \
