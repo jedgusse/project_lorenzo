@@ -25,7 +25,7 @@ class DataReader(object):
             for sentence in document.sentences:
                 yield sentence
 
-    def foreground_splits(self, discrim_size=.8):
+    def foreground_splits(self, discrim_size=.5):
         data = list(self.reader(include=self.foreground_authors))
 
         authors = [d.author for d in data]
@@ -52,14 +52,14 @@ class DataReader(object):
             (discrim_authors, discrim_titles, discrim_texts), \
             (test_authors, test_titles, test_texts)
 
-    def save(self, path, foreground_splits=.8):
+    def save(self, path, discrim_size=.8):
         authors = ['-'.join(a.replace('.', '').split())
                    for a in self.foreground_authors]
         fp = path + '{name}.{foreground_authors}.pkl'.format(
             name=self.name,
             foreground_authors='_'.join(authors))
         with open(fp, 'wb') as f:
-            pickle.dump({'splits': self.foreground_splits(),
+            pickle.dump({'splits': self.foreground_splits(discrim_size),
                          'foreground_authors': self.foreground_authors,
                          'name': self.name},
                         f)
