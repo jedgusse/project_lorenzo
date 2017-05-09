@@ -60,11 +60,11 @@ def packhum_reader(root=ROOT_FOLDER, exclude=(), include=(),
                       sentences=sentences)
 
 
-def pl_sentence_tokenizer(doc):
+def pl_sentence_tokenizer(doc, min_sent_len=5):
     """
     Transform .vrt files into list of sentences.
     Original sentences are markup <s></s>. However, it seems that
-    all sentences have been automatically terminated with a ".",
+    in some document sentences have been automatically terminated with a ".",
     and the actual final punctuation has been segmented to its own <s> element.
     Example:
         <s>
@@ -93,23 +93,32 @@ def pl_sentence_tokenizer(doc):
     Therefore we remove all last sentence tokens and add all single-token
     sentences to the previous <s> element.
     """
-    out, last = [], None
+    sents, out, eos_only = [], [], 0
     for s in doc:
         lines = s.text.strip().split('\n')
-        if len(lines) == 1:
-            # . SENT . -only lines
-            if last is not None:
-                last.append(".")
-            continue
-        if last is not None:
-            out.append(detokenizer(last))
-        last = list(line.split('\t')[0] for line in lines[:-1])
-    out.append(detokenizer(last))
-    return out
+        sent = [line.split('\t')[0] for line in lines]
+        if len(sent) == 1:
+            eos_only += 1
+        sents.append(sent)
+
+    if eos_only > (len(sents) / 3):  # take a 1/3 ratio as threshold
+        for idx, s in enumerate(sents[:-1]):
+            if len(sents[idx]) > 1 and len(sents[idx]) > min_sent_len:
+                if len(sents[idx + 1]) == 1:
+                    # assume doubled eos only if followed by eos only sent
+                    out.append(sents[idx][:-1] + sents[idx + 1])
+                else:
+                    out.append(sents[idx])
+        if len(sents[-1]) > 1 and len(sents[-1]) > min_sent_len:
+            out.append(sents[-1])
+    else:
+        out = sents
+
+    return [detokenizer(s) for s in out]
 
 
 def patrologia_reader(root=ROOT_FOLDER, exclude=(), include=(),
-                      subpath='pl'):
+                      subpath='pl', min_sent_len=5):
     for f in os.listdir(os.path.join(root, subpath)):
         author = f.split('.')[0].replace('_', ' ')
         if (exclude and author not in exclude) or \
@@ -122,7 +131,8 @@ def patrologia_reader(root=ROOT_FOLDER, exclude=(), include=(),
                 s.replace('<unknown>', 'unknown').encode('utf-8'))
             title = tree_root.attrib['titre']
             nb_words = tree_root.attrib['nb_tokens']
-            sentences = pl_sentence_tokenizer(tree_root)
+            sentences = pl_sentence_tokenizer(
+                tree_root, min_sent_len=min_sent_len)
             yield DOC(author=author,
                       title=title,
                       nb_words=nb_words,
