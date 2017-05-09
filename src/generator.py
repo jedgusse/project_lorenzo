@@ -9,6 +9,7 @@ from seqmod.misc.trainer import LMTrainer
 from seqmod.misc.optimizer import Optimizer
 from seqmod.misc.loggers import StdLogger
 from seqmod.misc.dataset import BlockDataset, Dict
+from seqmod.utils import save_model
 
 
 def make_generator_hook(max_words=100):
@@ -83,8 +84,8 @@ class LMGenerator(LM):
         trainer = LMTrainer(
             self, {'train': train, 'valid': valid}, criterion, optim)
         trainer.add_loggers(StdLogger())
-        checkpoints_per_epoch = len(train) // 10
-        hooks_per_epoch = len(train) // (checkpoints_per_epoch * 1)
+        checkpoints_per_epoch = max(len(train) // 10, 1)
+        hooks_per_epoch = max(len(train) // (checkpoints_per_epoch * 1), 1)
         trainer.add_hook(make_generator_hook(), hooks_per_epoch)
         if gpu:
             self.cuda()
@@ -92,7 +93,8 @@ class LMGenerator(LM):
 
     @staticmethod
     def fit_vocab(examples, max_size=None, min_freq=1):
-        d = Dict(eos_token='<eos>', max_size=max_size, min_freq=min_freq)
+        d = Dict(eos_token='<eos>', bos_token='<bos>', force_unk=False,
+                 max_size=max_size, min_freq=min_freq)
         d.fit(examples)
         return d
 
@@ -100,21 +102,37 @@ class LMGenerator(LM):
         self.cpu()     # ensure model is in cpu to avoid exploding gpu
         return copy.deepcopy(self)
 
-    def generate_doc(self, max_words=5000, reset_every=10, **kwargs):
+    def generate_doc(self, max_words=5000, max_sent_len=200, reset_every=10,
+                     max_tries=5, **kwargs):
+        """
+        Parameters
+        ===========
+        max_words : int, max number of words in the output document
+        max_sent_len : int, max number of characters per generated sentence
+        reset_every : int, number of sentences to wait until resetting hidden
+            state with the encoding of a randomly selected training sentence
+        max_tries : int, number of attempts at generating a well-formed sentence
+            before returning (well-formed meaning that it ends with <eos>).
+        kwargs : rest arguments passed onto LM.generate
+        """
 
-        def generate_sent(**kwargs):
-            scores, hyps = self.generate(
-                self.d, max_seq_len=100, gpu=self.gpu, **kwargs)  # generate
-            sent = ''.join(self.d.vocab[c] for c in hyps[0])  # decode ints
-            sent = sent.replace(self.d.eos_token, '')  # remove <eos>
-            return sent, len(sent.split()), scores[0]
+        def generate_sent(max_tries=5, **kwargs):
+            tries, hyp = 0, []
+            while (not hyp or hyp[-1] != self.d.eos_token) and tries < max_tries:
+                tries += 1
+                scores, hyps = self.generate(
+                    self.d, max_seq_len=max_sent_len, gpu=self.gpu, **kwargs)
+                score, hyp = scores[0], hyps[0]
+            sent = ''.join(self.d.vocab[c] for c in hyp)
+            # sent = sent.replace(self.d.eos_token, '')
+            return sent, len(sent.split()), scores
 
-        sent, words, score = generate_sent(**kwargs)
+        sent, words, score = generate_sent(max_tries=max_tries, **kwargs)
         seed_text, doc = None, [sent]
         while words < max_words:
-            print("Generated [%d/%d] words" % (words, max_words))
             kwargs.update({'seed_text': seed_text})  # use user seed only once
-            sent, sent_words, sent_score = generate_sent(**kwargs)
+            sent, sent_words, sent_score = generate_sent(
+                max_tries=max_tries, **kwargs)
             doc.append(sent)
             words += sent_words
             score += sent_score
@@ -129,6 +147,10 @@ class LMGenerator(LM):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
+    # data
+    parser.add_argument('--foreground_authors', nargs='+',
+                        default=('Tertullianus', 'Hieronymus Stridonensis'))
+    parser.add_argument('--save_path', default='')
     # train
     parser.add_argument('--batch_size', default=50, type=int)
     parser.add_argument('--bptt', default=50, type=int)
@@ -141,17 +163,33 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     from data import DataReader
-    foreground_authors = ('Tertullianus', 'Hieronymus Stridonensis')
-    reader = DataReader(name='PL', foreground_authors=foreground_authors)
+    reader = DataReader(name='PL', foreground_authors=args.foreground_authors)
     train, _, _ = reader.foreground_splits()
-    _, _, X_train = train
-    examples = [sent for doc in X_train for sent in doc]
-    fitted_d = LMGenerator.fit_vocab(examples)
+    X_authors, _, X_train = train
+    fitted_d = LMGenerator.fit_vocab([sent for doc in X_train for sent in doc])
     vocab = len(fitted_d)
-    generator = LMGenerator(vocab, args.emb_dim, args.hid_dim, args.num_layers)
-    generator.fit(examples, fitted_d, args.batch_size, args.bptt, args.epochs,
-                  gpu=args.gpu)
-    generator.eval()
-    doc, score = generator.generate_doc(max_words=500)
-    print()
-    print('\n'.join(doc))
+    lm_models = {}
+    for author in set(X_authors):
+        lm_models[author] = generator = LMGenerator(
+            vocab, args.emb_dim, args.hid_dim, args.num_layers, dropout=0.3)
+        examples = [sent for doc_author, doc in zip(X_authors, X_train)
+                    for sent in doc if doc_author == author]
+        n_chars, n_sents = sum(len(s) for s in examples), len(examples)
+        print('Training %s on %d chars, %d sents' % (author, n_chars, n_sents))
+        lm_models[author].fit(
+            examples, fitted_d, args.batch_size, args.bptt, args.epochs,
+            gpu=args.gpu)
+        lm_models[author].eval()  # set to validation mode
+        print('************\nGenerating text')
+        doc, score = lm_models[author].generate_doc(max_words=1000)
+        print("%s's generated sample text [%g]\n************" % (author, score))
+        print('\n'.join(doc))
+        print('************')
+
+    if args.save_path:
+        subpath = 'experiments/%s' % args.save_path
+        # save reader (with splits)
+        reader.save(subpath)
+        for author, model in lm_models.items():
+            # save generators
+            save_model(model, '%s/%s' % (subpath, author))
