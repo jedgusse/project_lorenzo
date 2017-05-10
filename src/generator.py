@@ -1,4 +1,6 @@
+#!/usr/bin/env
 
+import os
 import random
 import copy
 
@@ -57,7 +59,7 @@ class LMGenerator(LM):
             optim_method='SGD', lr=1., max_norm=5.,
             start_decay_at=15, decay_every=5, lr_decay=0.8,
             # other parameters
-            gpu=False):
+            gpu=False, verbose=True):
         """
         Parameters
         ===========
@@ -83,10 +85,11 @@ class LMGenerator(LM):
             decay_every=decay_every)
         trainer = LMTrainer(
             self, {'train': train, 'valid': valid}, criterion, optim)
-        trainer.add_loggers(StdLogger())
-        checkpoints_per_epoch = max(len(train) // 10, 1)
-        hooks_per_epoch = max(len(train) // (checkpoints_per_epoch * 1), 1)
-        trainer.add_hook(make_generator_hook(), hooks_per_epoch)
+        if verbose:
+            trainer.add_loggers(StdLogger())
+            checkpoints_per_epoch = max(len(train) // 10, 1)
+            hooks_per_epoch = max(len(train) // (checkpoints_per_epoch * 1), 1)
+            trainer.add_hook(make_generator_hook(), hooks_per_epoch)
         if gpu:
             self.cuda()
         trainer.train(epochs, checkpoint=checkpoints_per_epoch, gpu=gpu)
@@ -124,7 +127,7 @@ class LMGenerator(LM):
                     self.d, max_seq_len=max_sent_len, gpu=self.gpu, **kwargs)
                 score, hyp = scores[0], hyps[0]
             sent = ''.join(self.d.vocab[c] for c in hyp)
-            # sent = sent.replace(self.d.eos_token, '')
+            sent = sent.replace('<bos>', '').replace('<eos>', '')
             return sent, score
 
         sent, score = generate_sent(max_tries=max_tries, **kwargs)
@@ -167,28 +170,25 @@ if __name__ == '__main__':
     X_authors, _, X_train = train
     fitted_d = LMGenerator.fit_vocab([sent for doc in X_train for sent in doc])
     vocab = len(fitted_d)
-    lm_models = {}
+
+    if args.save_path:
+        subpath = 'experiments/%s' % args.save_path
+        if not os.path.isdir(subpath):
+            os.mkdir(subpath)
+        # save reader (with splits)
+        reader.save(subpath + '/')
+
     for author in set(X_authors):
-        lm_models[author] = generator = LMGenerator(
+        generator = LMGenerator(
             vocab, args.emb_dim, args.hid_dim, args.num_layers, dropout=0.3)
         examples = [sent for doc_author, doc in zip(X_authors, X_train)
                     for sent in doc if doc_author == author]
         n_chars, n_sents = sum(len(s) for s in examples), len(examples)
         print('Training %s on %d chars, %d sents' % (author, n_chars, n_sents))
-        lm_models[author].fit(
+        generator.fit(
             examples, fitted_d, args.batch_size, args.bptt, args.epochs,
             gpu=args.gpu)
-        lm_models[author].eval()  # set to validation mode
-        print('************\nGenerating text')
-        doc, score = lm_models[author].generate_doc(max_words=1000)
-        print("%s's generated sample text [%g]\n************" % (author, score))
-        print('\n'.join(doc))
-        print('************')
+        generator.eval()        # set to validation mode
 
-    if args.save_path:
-        subpath = 'experiments/%s' % args.save_path
-        # save reader (with splits)
-        reader.save(subpath)
-        for author, model in lm_models.items():
-            # save generators
-            save_model(model, '%s/%s' % (subpath, author))
+        if args.save_path:
+            save_model(generator, '%s/%s' % (subpath, '_'.join(author.split())))

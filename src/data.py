@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import logging
 try:
     import cPickle as pickle
 except ImportError:
@@ -25,7 +26,7 @@ class DataReader(object):
             for sentence in document.sentences:
                 yield sentence
 
-    def foreground_splits(self, discrim_size=.5):
+    def foreground_splits(self, discrim_size=.3):
         data = list(self.reader(include=self.foreground_authors))
 
         authors = [d.author for d in data]
@@ -45,7 +46,7 @@ class DataReader(object):
             gener_titles, test_titles, \
             gener_texts, test_texts = train_test_split(
                 rest_authors, rest_titles, rest_texts,
-                train_size=int(len(rest_authors) / 2.0),
+                train_size=int(len(rest_authors) / 1.5),
                 stratify=rest_authors)
 
         return (gener_authors, gener_titles, gener_texts), \
@@ -70,10 +71,11 @@ class DataReader(object):
             obj = pickle.load(f)
 
         class LoadedReader(DataReader):
-            def foreground_splits(self, foreground_splits=None):
-                if foreground_splits is not None:
-                    print("Loaded reader doesn't allow changing " +
-                          "the foreground split proportions")
+            def foreground_splits(self, discrim_size=None):
+                if discrim_size is not None:
+                    logging.warn("Loaded reader doesn't allow changing " +
+                                 "the foreground split proportions and " +
+                                 "`discrim_size` will be ignored.")
                 return obj['splits']
 
         return LoadedReader(name=obj['name'],
