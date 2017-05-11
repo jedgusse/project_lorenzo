@@ -17,8 +17,8 @@ from sklearn.metrics import classification_report
 
 from seqmod.utils import load_model
 
+from utils import generate_docs, docs_to_X
 from data import DataReader
-from generator import LMGenerator
 
 
 def to_dense(X):
@@ -41,13 +41,6 @@ def deltavectorizer(X):
     # NaNs are replaced by zero
     X = np.nan_to_num(X)
     return X
-
-
-def docs_to_X(docs):
-    """
-    Joins sentences in a collection of documents
-    """
-    return [' '.join(doc) for doc in docs]
 
 
 def pipe_grid_clf(X_train, y_train):
@@ -128,9 +121,9 @@ if __name__ == '__main__':
     # - Load discriminator data and generator models
     reader_path, generators = None, {}
     for f in os.listdir(args.path):
-        if f.endswith('pkl'):
+        if f.endswith('pkl'):   # reader path
             reader_path = os.path.join(args.path, f)
-        elif f.endswith('pt'):
+        elif f.endswith('pt'):  # generator path
             basename = os.path.splitext(os.path.basename(f))[0]
             author = ' '.join(basename.split('_'))
             generators[author] = os.path.join(args.path, f)
@@ -165,22 +158,6 @@ if __name__ == '__main__':
     print(classification_report(le.transform(y_test), prediction))
 
     # - Generate (or load) generated documents
-    def generate_docs(generator, author, nb_docs, max_words,
-                      save=False, path=None):
-        print("::: Generating %d docs for %s" % (args.nb_docs, author))
-        docs, scores = [], []
-        max_sent_len = max(len(s) for s in generator.examples)
-        for doc_id in range(nb_docs):
-            doc, score = generator.generate_doc(
-                max_words=max_words, max_sent_len=max_sent_len)
-            docs.append(doc), scores.append(score)
-            if save:
-                doc_id = str(doc_id + 1).rjust(len(str(nb_docs)), '0')
-                fname = '%s.%s.txt' % ('_'.join(author.split()), doc_id)
-                with open(os.path.join(path, fname), 'w+') as f:
-                    f.write('\n'.join(doc))
-        return docs, author
-
     X_gen, y_gen = [], []
 
     if args.load_generated:     # load generated documents
@@ -203,7 +180,8 @@ if __name__ == '__main__':
                 save=args.save_generated, path=args.generated_path)
             for author, fpath in generators.items())
         for docs, author in results:
-            X_gen.extend(docs), y_gen.extend([author for _ in range(len(docs))])
+            X_gen.extend(docs)
+            y_gen.extend([author for __ in range(len(docs))])
         """
         # Single-threaded code
         for author, fpath in generators.items():
@@ -211,7 +189,8 @@ if __name__ == '__main__':
             docs, _ = generate_docs(
                 generator, author, args.nb_docs, args.max_words,
                 save=args.save_generated, path=args.generated_path)
-            X_gen.extend(docs), y_gen.extend([author for _ in range(len(docs))])
+            X_gen.extend(docs)
+            y_gen.extend([author for _ in range(len(docs))])
         """
 
     # - Test estimator on generated docs
