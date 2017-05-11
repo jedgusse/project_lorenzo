@@ -51,9 +51,6 @@ def pipe_grid_clf(X_train, y_train):
         where a sent is a str)
     y_train : list of transformed labels
     """
-    # Abstract over sents
-    X_train = docs_to_X(X_train)
-
     # Initialize pipeline
     # Steps in the pipeline:
     # 1 Vectorize incoming training material
@@ -141,7 +138,7 @@ if __name__ == '__main__':
     # translate author names to labels
     le = preprocessing.LabelEncoder()
     y_train = le.fit_transform(y_train)
-    grid = pipe_grid_clf(X_train, y_train)
+    grid = pipe_grid_clf(docs_to_X(X_train), y_train)
 
     # make prediction with the best parameters
     best_model = grid.best_estimator_

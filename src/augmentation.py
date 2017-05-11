@@ -19,33 +19,18 @@ from classifier import pipe_grid_clf
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('path')
+    parser.add_argument('reader_path')
     parser.add_argument('--load_generated', action='store_true')
-    parser.add_argument('--save_generated', action='store_true')
     parser.add_argument('--generated_path',
                         help='Path to generated files. Filename ' +
                         'in format: authorname_docnum.txt')
+    parser.add_argument('--save_generated', action='store_true')
     parser.add_argument('--nb_docs', default=10, type=int,
                         help='Number of generated docs per author')
     args = parser.parse_args()
 
     # - Load reader and generator paths
-    reader_path, generators = None, {}
-    for f in os.listdir(args.path):
-        if f.endswith('pkl'):   # reader path
-            reader_path = os.path.join(args.path, f)
-        elif f.endswith('pt'):  # generator path
-            basename = os.path.splitext(os.path.basename(f))[0]
-            author = ' '.join(basename.split('_'))
-            generators[author] = os.path.join(args.path, f)
-
-    if args.reader_path:        # load reader from custom path
-        reader_path = args.reader_path
-
-    if not reader_path:
-        raise ValueError("Couldn't find reader in dir [%s]" % args.path)
-
-    reader = DataReader.load(reader_path)
+    reader = DataReader.load(args.reader_path)
     gener, discrim, test = reader.foreground_splits()
 
     X_train, y_train, X_test, y_test = [], [], [], []
@@ -54,7 +39,7 @@ if __name__ == '__main__':
     if args.load_generated:     # load generated documents
         assert not args.generated_path or os.path.isdir(args.generated_path), \
             "argument to --generated_path is not a valid path"
-        for fname in os.listdir(args.generated_path):
+        for fname in os.listdir(args.generated_path):  # author_name.doc_id.txt
             author = fname.split('.')[0].replace('_', ' ')
             doc = []
             with open(os.path.join(args.generated_path, fname), 'r') as f:
@@ -76,16 +61,26 @@ if __name__ == '__main__':
 
     # - Load real data (for testing)
     _, discrim, _ = reader.foreground_splits()
-    _, X_test, y_test = discrim
+    y_test, _, X_test = discrim
 
+    n_docs = len(X_train)
+    n_words = sum(len(s.split()) for doc in X_train for s in doc)
+    n_authors = len(set(y_train))
     le = preprocessing.LabelEncoder()
     y_train = le.fit_transform(y_train)
-    grid = pipe_grid_clf(X_train, y_train)
+    print("::: Training on %d docs, %d words, %d authors :::"
+          % (n_docs, n_words, n_authors))
+    grid = pipe_grid_clf(docs_to_X(X_train), y_train)
 
     # make prediction with the best parameters
     best_model = grid.best_estimator_
     best_params = grid.best_params_
     accuracy = grid.best_score_ * 100
+    n_docs = len(X_test)
+    n_words = sum(len(s.split()) for doc in X_test for s in doc)
+    n_authors = len(set(y_test))
+    print("::: Testing on %d docs, %d words, %d authors :::"
+          % (n_docs, n_words, n_authors))
     prediction = grid.predict(docs_to_X(X_test))
 
     print("::: Best model :::")
