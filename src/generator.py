@@ -59,7 +59,7 @@ class LMGenerator(LM):
             optim_method='SGD', lr=1., max_norm=5.,
             start_decay_at=15, decay_every=5, lr_decay=0.8,
             # other parameters
-            gpu=False, verbose=True):
+            gpu=False, verbose=True, add_hook=False):
         """
         Parameters
         ===========
@@ -87,7 +87,8 @@ class LMGenerator(LM):
             self, {'train': train, 'valid': valid}, criterion, optim)
         if verbose:
             trainer.add_loggers(StdLogger())
-            checkpoints_per_epoch = max(len(train) // 10, 1)
+        checkpoints_per_epoch = max(len(train) // 10, 1)
+        if add_hook:
             hooks_per_epoch = max(len(train) // (checkpoints_per_epoch * 1), 1)
             trainer.add_hook(make_generator_hook(), hooks_per_epoch)
         if gpu:
@@ -150,44 +151,61 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     # data
-    parser.add_argument('--foreground_authors', nargs='+',
-                        default=('Tertullianus', 'Hieronymus Stridonensis'))
+    parser.add_argument('--subset', default='PL')
+    parser.add_argument('--crop_docs', default=False, type=int,
+                        help='Maximum nb of words per document')
+    parser.add_argument('--foreground_authors',
+                        default=('Augustinus Hipponensis', 'Hieronymus Stridonensis',
+                                 'Bernardus Claraevallensis', 'Walafridus Strabo'),
+                        type=lambda args: args.split(','))
     parser.add_argument('--save_path', default='')
+    parser.add_argument('--load_data', default='')
     # train
     parser.add_argument('--batch_size', default=50, type=int)
     parser.add_argument('--bptt', default=50, type=int)
     parser.add_argument('--epochs', default=10, type=int)
     parser.add_argument('--gpu', action='store_true')
+    parser.add_argument('--add_hook', action='store_true')
     # model
     parser.add_argument('--emb_dim', default=24, type=int)
     parser.add_argument('--hid_dim', default=200, type=int)
     parser.add_argument('--num_layers', default=2, type=int)
     args = parser.parse_args()
 
-    from data import DataReader
-    reader = DataReader(name='PL', foreground_authors=args.foreground_authors)
+    from data import DataReader, crop_docs
+    if args.load_data:
+        reader = DataReader.load(args.load_data)
+    else:
+        reader = DataReader(
+            name=args.subset, foreground_authors=args.foreground_authors)
     train, _, _ = reader.foreground_splits()
     X_authors, _, X_train = train
+    if args.crop_docs:
+        X_train = list(crop_docs(X_train, max_words=args.crop_docs))
     fitted_d = LMGenerator.fit_vocab([sent for doc in X_train for sent in doc])
     vocab = len(fitted_d)
 
-    if args.save_path:
-        subpath = 'experiments/%s' % args.save_path
-        if not os.path.isdir(subpath):
-            os.mkdir(subpath)
+    subpath = 'experiments/%s' % args.save_path
+    if not os.path.isdir(subpath):
+        os.mkdir(subpath)
+    if args.save_path and not args.load_data:  # only save if not loaded
         # save reader (with splits)
-        reader.save(subpath + '/')
+        authors = ['-'.join(author.replace('.', '').split())
+                   for author in args.foreground_authors]
+        fname = '{name}.{foreground_authors}'.format(
+            name=args.subset, foreground_authors='_'.join(authors))
+        reader.save(os.path.join(subpath, fname))
 
     for author in set(X_authors):
         generator = LMGenerator(
             vocab, args.emb_dim, args.hid_dim, args.num_layers, dropout=0.3)
         examples = [sent for doc_author, doc in zip(X_authors, X_train)
                     for sent in doc if doc_author == author]
-        n_chars, n_sents = sum(len(s) for s in examples), len(examples)
-        print('Training %s on %d chars, %d sents' % (author, n_chars, n_sents))
+        n_words, n_sents = sum(len(s.split()) for s in examples), len(examples)
+        print('Training %s on %d words, %d sents' % (author, n_words, n_sents))
         generator.fit(
             examples, fitted_d, args.batch_size, args.bptt, args.epochs,
-            gpu=args.gpu)
+            gpu=args.gpu, add_hook=args.add_hook)
         generator.eval()        # set to validation mode
 
         if args.save_path:

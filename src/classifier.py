@@ -57,12 +57,9 @@ def pipe_grid_clf(X_train, y_train):
     X_train : list of documents (where a document is a list of sents,
         where a sent is a str)
     y_train : list of transformed labels
-    X_test : same format as X_train
-    y_test : same format as y_train
     """
     # Abstract over sents
     X_train = docs_to_X(X_train)
-    X_test = docs_to_X(X_test)
 
     # Initialize pipeline
     # Steps in the pipeline:
@@ -117,6 +114,7 @@ if __name__ == '__main__':
                         'authorname_docnum.txt')
     parser.add_argument('--save_generated', action='store_true')
     parser.add_argument('--load_generated', action='store_true')
+    parser.add_argument('--reader_path', default='')
     parser.add_argument('--nb_docs', default=10, type=int,
                         help='Number of generated docs per author')
     parser.add_argument('--max_words', default=10000, type=int,
@@ -137,6 +135,9 @@ if __name__ == '__main__':
             author = ' '.join(basename.split('_'))
             generators[author] = os.path.join(args.path, f)
 
+    if args.reader_path:        # load reader from custom path
+        reader_path = args.reader_path
+
     if not reader_path:
         raise ValueError("Couldn't find reader in dir [%s]" % args.path)
 
@@ -147,14 +148,13 @@ if __name__ == '__main__':
     # translate author names to labels
     le = preprocessing.LabelEncoder()
     y_train = le.fit_transform(y_train)
-    y_test = le.transform(y_test)
     grid = pipe_grid_clf(X_train, y_train)
 
     # make prediction with the best parameters
     best_model = grid.best_estimator_
     best_params = grid.best_params_
     accuracy = grid.best_score_ * 100
-    prediction = grid.predict(X_test)
+    prediction = grid.predict(docs_to_X(X_test))
 
     print("::: Best model :::")
     pprint(best_model)
@@ -162,7 +162,7 @@ if __name__ == '__main__':
     pprint(best_params)
     print("::: CV Accuracy :::", "%g" % accuracy)
     print("::: Classification report :::")
-    print(classification_report(y_test, prediction))
+    print(classification_report(le.transform(y_test), prediction))
 
     # - Generate (or load) generated documents
     def generate_docs(generator, author, nb_docs, max_words,

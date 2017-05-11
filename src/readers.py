@@ -45,7 +45,34 @@ def packhum_sentence_tokenizer(doc):
     return CLTK_TOK.tokenize_sentences(doc)
 
 
-def packhum_reader(root=ROOT_FOLDER, exclude=(), include=(),
+def _reader_gen(doc_func, root, include, exclude, subpath, min_sent_len):
+    found = set()
+    for f in os.listdir(os.path.join(root, subpath)):
+        author = f.split('.')[0].replace('_', ' ')
+        if (exclude and author not in exclude) or \
+           (include and author in include) or \
+           (not include and not exclude):
+            with open(os.path.join(root, subpath, f), 'r+') as inf:
+                title, nb_words, sentences = doc_func(inf, min_sent_len)
+            yield DOC(author=author, title=title,
+                      nb_words=nb_words, sentences=sentences)
+            found.add(author)
+    # check whether all include authors have been found
+    for author in include:
+        assert author in found, "Didn't found author %s" % author
+
+
+def _packhum_func(inf, min_sent_len):
+    work = json.load(inf)
+    title = work['author']
+    sentences = [s for page in work['pages']
+                 for s in packhum_sentence_tokenizer(page['text'])
+                 if len(s.split()) > min_sent_len]
+    nb_words = sum(len(s.split()) for s in sentences)
+    return title, nb_words, sentences
+
+
+def packhum_reader(root=ROOT_FOLDER, include=(), exclude=(),
                    subpath='packhum/merged', min_sent_len=5):
     """
     Parameters
@@ -57,21 +84,8 @@ def packhum_reader(root=ROOT_FOLDER, exclude=(), include=(),
         underscores `_` with blankspaces ` `.
     indlude : tuple of str, authors to include when reading.
     """
-    for f in os.listdir(os.path.join(root, subpath)):
-        author = f.split('.')[0].replace('_', ' ')
-        if (exclude and author not in exclude) or \
-           (include and author in include) or \
-           (not include and not exclude):
-            with open(os.path.join(root, subpath, f), 'r+') as inf:
-                work = json.load(inf)
-            title = work['author']
-            sentences = [s for page in work['pages']
-                         for s in packhum_sentence_tokenizer(page['text'])
-                         if len(s.split()) > min_sent_len]
-            yield DOC(author=author,
-                      title=title,
-                      nb_words=sum(len(s.split()) for s in sentences),
-                      sentences=sentences)
+    return _reader_gen(
+        _packhum_func, root, include, exclude, subpath, min_sent_len)
 
 
 def pl_sentence_tokenizer(doc, min_sent_len=5):
@@ -131,33 +145,32 @@ def pl_sentence_tokenizer(doc, min_sent_len=5):
     return [detokenizer(s) for s in out]
 
 
-def patrologia_reader(root=ROOT_FOLDER, exclude=(), include=(),
+def _pl_func(inf, min_sent_len):
+    s = inf.read()
+    tree_root = etree.fromstring(
+        # get rid of rogue xml
+        s.replace('<unknown>', 'unknown').encode('utf-8'))
+    title = tree_root.attrib['titre']
+    nb_words = tree_root.attrib['nb_tokens']
+    sentences = pl_sentence_tokenizer(tree_root, min_sent_len=min_sent_len)
+    nb_words = sum(len(s.split()) for s in sentences)
+    return title, nb_words, sentences
+
+
+def patrologia_reader(root=ROOT_FOLDER, include=(), exclude=(),
                       subpath='pl', min_sent_len=5):
     """
+    Parameters
+    ===========
+
     root : str, top folder of the processed data
     exclude : tuple of str, authors to skip when reading. Note that
         author names are determined by the file name substituting 
         underscores `_` with blankspaces ` `.
     indlude : tuple of str, authors to include when reading.
     """
-    for f in os.listdir(os.path.join(root, subpath)):
-        author = f.split('.')[0].replace('_', ' ')
-        if (exclude and author not in exclude) or \
-           (include and author in include) or \
-           (not include and not exclude):
-            with open(os.path.join(root, subpath, f), 'r+') as inf:
-                s = inf.read()
-            tree_root = etree.fromstring(
-                # get rid of rogue xml
-                s.replace('<unknown>', 'unknown').encode('utf-8'))
-            title = tree_root.attrib['titre']
-            nb_words = tree_root.attrib['nb_tokens']
-            sentences = pl_sentence_tokenizer(
-                tree_root, min_sent_len=min_sent_len)
-            yield DOC(author=author,
-                      title=title,
-                      nb_words=nb_words,
-                      sentences=sentences)
+    return _reader_gen(
+        _pl_func, root, include, exclude, subpath, min_sent_len)
 
 
 if __name__ == '__main__':
