@@ -183,7 +183,7 @@ if __name__ == '__main__':
 
     X_gen, y_gen = [], []
 
-    if args.load_generated:
+    if args.load_generated:     # load generated documents
         assert not args.generated_path or os.path.isdir(args.generated_path), \
             "argument to --generated_path is not a valid path"
         for fname in os.listdir(args.generated_path):
@@ -193,7 +193,7 @@ if __name__ == '__main__':
                 for line in f:
                     doc.append(line.strip())
             X_gen.append(doc), y_gen.append(author)
-    else:
+    else:                       # generate documents
         if args.save_generated and not os.path.isdir(args.generated_path):
             os.mkdir(args.generated_path)
         num_cores = multiprocessing.cpu_count()
@@ -204,7 +204,8 @@ if __name__ == '__main__':
             for author, fpath in generators.items())
         for docs, author in results:
             X_gen.extend(docs), y_gen.extend([author for _ in range(len(docs))])
-        """ # Single-threaded code
+        """
+        # Single-threaded code
         for author, fpath in generators.items():
             generator = load_model(fpath)
             docs, _ = generate_docs(
