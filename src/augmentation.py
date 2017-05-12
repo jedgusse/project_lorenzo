@@ -19,19 +19,36 @@ from classifier import pipe_grid_clf
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('reader_path')
+    parser.add_argument('path', help='Top directory containing reader ' +
+                        'and generators as per generator.py')
+    parser.add_argument('--reader_path', help='Custom reader path.')
     parser.add_argument('--load_generated', action='store_true')
     parser.add_argument('--generated_path',
-                        help='Path to generated files. Filename ' +
+                        help='Path to generated files. Filenames ' +
                         'in format: authorname_docnum.txt')
     parser.add_argument('--save_generated', action='store_true')
+    parser.add_argument('--max_words', default=2000, type=int)
     parser.add_argument('--nb_docs', default=10, type=int,
                         help='Number of generated docs per author')
     args = parser.parse_args()
 
     # - Load reader and generator paths
-    reader = DataReader.load(args.reader_path)
-    gener, discrim, test = reader.foreground_splits()
+    reader_path, generators = None, {}
+    for f in os.listdir(args.path):
+        if f.endswith('pkl'):   # reader path
+            reader_path = os.path.join(args.path, f)
+        elif f.endswith('pt'):  # generator path
+            basename = os.path.splitext(os.path.basename(f))[0]
+            author = ' '.join(basename.split('_'))
+            generators[author] = os.path.join(args.path, f)
+
+    if args.reader_path:        # load reader from custom path
+        reader_path = args.reader_path
+
+    if not reader_path:
+        raise ValueError("Couldn't find reader in dir [%s]" % args.path)
+
+    gener, discrim, _ = reader.foreground_splits()
 
     X_train, y_train, X_test, y_test = [], [], [], []
 
@@ -60,8 +77,7 @@ if __name__ == '__main__':
             y_train.extend([author for _ in range(len(docs))])
 
     # - Load real data (for testing)
-    _, discrim, _ = reader.foreground_splits()
-    y_test, _, X_test = discrim
+    y_test, _, X_test = discrim  # ignore titles
 
     n_docs = len(X_train)
     n_words = sum(len(s.split()) for doc in X_train for s in doc)

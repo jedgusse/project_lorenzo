@@ -18,6 +18,7 @@ from sklearn.metrics import classification_report
 from seqmod.utils import load_model
 
 from utils import generate_docs, docs_to_X
+from generator import LMGenerator
 from data import DataReader
 
 
@@ -84,7 +85,6 @@ def pipe_grid_clf(X_train, y_train):
             'classifier__kernel': kernel_options,
         },
     ]
-
     # Stratification is default
     # For integer/None inputs for cv, if the estimator is a classifier
     # and y is either binary or multiclass, StratifiedKFold is used.
@@ -98,16 +98,20 @@ def pipe_grid_clf(X_train, y_train):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('path', help='Path to experiment. generator.py output')
+    parser.add_argument('path', help='Top directory containing reader ' +
+                        'and generators as per generator.py')
     parser.add_argument('--generated_path',
                         help='Path to generated files. Filename in format: ' +
-                        'authorname_docnum.txt')
-    parser.add_argument('--save_generated', action='store_true')
+                        'authorname_docnum.txt. It will be used as target ' +
+                        'write dir if save_generated is passed or as target ' +
+                        'read dir if load_generated is passed.')
+    parser.add_argument('--reader_path', help='Custom reader path.')
+    parser.add_argument('--save_generated', action='store_true',
+                        help='Whether to save the generated texts')
     parser.add_argument('--load_generated', action='store_true')
-    parser.add_argument('--reader_path', default='')
     parser.add_argument('--nb_docs', default=10, type=int,
                         help='Number of generated docs per author')
-    parser.add_argument('--max_words', default=10000, type=int,
+    parser.add_argument('--max_words', default=2000, type=int,
                         help='Number of words per generated doc')
     args = parser.parse_args()
     assert not (args.save_generated and not args.generated_path), \
@@ -115,7 +119,7 @@ if __name__ == '__main__':
     assert not (args.load_generated and not args.generated_path), \
         "--load_generated requires --generated_path"
 
-    # - Load discriminator data and generator models
+    # 1 Load discriminator data and generator models/data
     reader_path, generators = None, {}
     for f in os.listdir(args.path):
         if f.endswith('pkl'):   # reader path
@@ -131,30 +135,7 @@ if __name__ == '__main__':
     if not reader_path:
         raise ValueError("Couldn't find reader in dir [%s]" % args.path)
 
-    # - Compute best estimator
-    reader = DataReader.load(reader_path)
-    _, train, test = reader.foreground_splits()
-    (y_train, _, X_train), (y_test, _, X_test) = train, test
-    # translate author names to labels
-    le = preprocessing.LabelEncoder()
-    y_train = le.fit_transform(y_train)
-    grid = pipe_grid_clf(docs_to_X(X_train), y_train)
-
-    # make prediction with the best parameters
-    best_model = grid.best_estimator_
-    best_params = grid.best_params_
-    accuracy = grid.best_score_ * 100
-    prediction = grid.predict(docs_to_X(X_test))
-
-    print("::: Best model :::")
-    pprint(best_model)
-    print("::: Best model params :::")
-    pprint(best_params)
-    print("::: CV Accuracy :::", "%g" % accuracy)
-    print("::: Classification report :::")
-    print(classification_report(le.transform(y_test), prediction))
-
-    # - Generate (or load) generated documents
+    # generate (or load) generated documents
     X_gen, y_gen = [], []
 
     if args.load_generated:     # load generated documents
@@ -190,7 +171,45 @@ if __name__ == '__main__':
             y_gen.extend([author for _ in range(len(docs))])
         """
 
-    # - Test estimator on generated docs
+    # 2 Compute best estimator on real data
+    reader = DataReader.load(reader_path)
+    test, train, _ = reader.foreground_splits()  # use gener split as test
+    (y_train, _, X_train), (y_test, _, X_test) = train, test
+
+    # remove authors with no generator (because training failed)
+    for idx, y in enumerate(y_train):
+        if y not in generators:
+            del y_train[idx]
+            del X_train[idx]
+    for idx, y in enumerate(y_test):
+        if y not in generators:
+            del y_test[idx]
+            del X_test[idx]
+
+    # translate author names to labels
+    le = preprocessing.LabelEncoder()
+    y_train = le.fit_transform(y_train)
+    print("::: Encoded labels :::")
+    labels = list(generators.keys())
+    idxs = le.inverse_transform(labels)
+    print('\n'.join(['%s: %d' % (l, idx) for l, idx in zip(labels, idxs)]))
+    grid = pipe_grid_clf(docs_to_X(X_train), y_train)
+
+    # make prediction with the best parameters
+    best_model = grid.best_estimator_
+    best_params = grid.best_params_
+    accuracy = grid.best_score_ * 100
+    prediction = grid.predict(docs_to_X(X_test))
+
+    print("::: Best model :::")
+    pprint(best_model)
+    print("::: Best model params :::")
+    pprint(best_params)
+    print("::: CV Accuracy :::", "%g" % accuracy)
+    print("::: Classification report :::")
+    print(classification_report(le.transform(y_test), prediction))
+
+    # 3 Test estimator on generated docs
     gen_pred = grid.predict(docs_to_X(X_gen))
     print("::: Generation classification report :::")
     print(classification_report(le.transform(y_gen), gen_pred))

@@ -106,7 +106,7 @@ class LMGenerator(LM):
         self.cpu()     # ensure model is in cpu to avoid exploding gpu
         return copy.deepcopy(self)
 
-    def generate_doc(self, max_words=5000, max_sent_len=200, reset_every=10,
+    def generate_doc(self, max_words=2000, max_sent_len=200, reset_every=10,
                      max_tries=5, **kwargs):
         """
         Parameters
@@ -155,8 +155,10 @@ if __name__ == '__main__':
     parser.add_argument('--crop_docs', default=False, type=int,
                         help='Maximum nb of words per document')
     parser.add_argument('--foreground_authors',
-                        default=('Augustinus Hipponensis', 'Hieronymus Stridonensis',
-                                 'Bernardus Claraevallensis', 'Walafridus Strabo'),
+                        default=('Augustinus Hipponensis',
+                                 'Hieronymus Stridonensis',
+                                 'Bernardus Claraevallensis',
+                                 'Walafridus Strabo'),
                         type=lambda args: args.split(','))
     parser.add_argument('--save_path', default='')
     parser.add_argument('--load_data', default='')
@@ -178,8 +180,8 @@ if __name__ == '__main__':
     else:
         reader = DataReader(
             name=args.subset, foreground_authors=args.foreground_authors)
-    train, _, _ = reader.foreground_splits()
-    X_authors, _, X_train = train
+    train, _, _ = reader.foreground_splits()  # take gener split
+    X_authors, _, X_train = train             # ignore titles
     if args.crop_docs:
         X_train = list(crop_docs(X_train, max_words=args.crop_docs))
     fitted_d = LMGenerator.fit_vocab([sent for doc in X_train for sent in doc])
@@ -203,10 +205,13 @@ if __name__ == '__main__':
                     for sent in doc if doc_author == author]
         n_words, n_sents = sum(len(s.split()) for s in examples), len(examples)
         print('Training %s on %d words, %d sents' % (author, n_words, n_sents))
-        generator.fit(
-            examples, fitted_d, args.batch_size, args.bptt, args.epochs,
-            gpu=args.gpu, add_hook=args.add_hook)
-        generator.eval()        # set to validation mode
-
-        if args.save_path:
-            save_model(generator, '%s/%s' % (subpath, '_'.join(author.split())))
+        try:
+            generator.fit(
+                examples, fitted_d, args.batch_size, args.bptt, args.epochs,
+                gpu=args.gpu, add_hook=args.add_hook)
+            generator.eval()        # set to validation mode
+            if args.save_path:
+                model_path = '%s/%s' % (subpath, '_'.join(author.split()))
+                save_model(generator, model_path)
+        except Exception as e:
+            print("Couldn't train %s. Exception: %s" % (author, str(e)))

@@ -42,7 +42,7 @@ class DataReader(object):
             for sentence in document.sentences:
                 yield sentence
 
-    def foreground_splits(self, gener_size=.4, discrim_size=.6, test=False):
+    def foreground_splits(self, gener_size=.5, discrim_size=.5, test=False):
         """
         gener_size : float, proportion of text allocated to generator training
             (with respect to the total data)
@@ -66,7 +66,7 @@ class DataReader(object):
                 train_size=float(gener_size),
                 stratify=authors)
 
-        if not test:
+        if test:
             # split remaining data in equally-sized discrim and test
             discrim_authors, test_authors, \
                 discrim_titles, test_titles, \
@@ -81,7 +81,7 @@ class DataReader(object):
         else:
             # return test split as discrim split
             return (gener_authors, gener_titles, gener_texts), \
-                (rest_authors, rest_titles, rest_texts)
+                (rest_authors, rest_titles, rest_texts), None
 
     def save(self, path, gener_size=.4, discrim_size=.6, **kwargs):
         fname = path if path.endswith('.pkl') else path + '.pkl'
@@ -129,10 +129,10 @@ if __name__ == '__main__':
                         type=lambda args: args.split(','))
     parser.add_argument('--gener_size', default=.6, type=float)
     parser.add_argument('--discrim_size', default=.4, type=float)
-    parser.add_argument('--test', action='store_true')
+    parser.add_argument('--not_test', action='store_true')
     parser.add_argument('--path', default='test')
     args = parser.parse_args()
 
     reader = DataReader(name='PL', foreground_authors=args.foreground_authors)
     reader.save(args.path, gener_size=args.gener_size,
-                discrim_size=args.discrim_size, test=args.test)
+                discrim_size=args.discrim_size, test=not args.not_test)
