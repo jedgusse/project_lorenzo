@@ -9,7 +9,7 @@ except ImportError:
 
 from sklearn.model_selection import train_test_split
 
-import readers
+from src import readers
 
 READERS = {'PL': readers.patrologia_reader,
            'PackHum': readers.packhum_reader}

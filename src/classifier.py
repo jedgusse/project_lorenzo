@@ -17,9 +17,9 @@ from sklearn.metrics import classification_report
 
 from seqmod.utils import load_model
 
-from utils import generate_docs, docs_to_X
-from generator import LMGenerator
-from data import DataReader
+from src.utils import generate_docs, docs_to_X
+from src.generator import LMGenerator
+from src.data import DataReader
 
 
 def to_dense(X):

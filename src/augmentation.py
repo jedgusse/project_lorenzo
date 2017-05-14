@@ -12,9 +12,8 @@ from sklearn import preprocessing
 
 from seqmod.utils import load_model
 
-from utils import generate_docs, docs_to_X
-from data import DataReader
-from classifier import pipe_grid_clf
+from src.utils import generate_docs, docs_to_X
+from src.classifier import pipe_grid_clf
 
 
 if __name__ == '__main__':
