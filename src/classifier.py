@@ -191,7 +191,7 @@ if __name__ == '__main__':
     y_train = le.fit_transform(y_train)
     print("::: Encoded labels :::")
     labels = list(generators.keys())
-    idxs = le.inverse_transform(labels)
+    idxs = le.transform(labels)
     print('\n'.join(['%s: %d' % (l, idx) for l, idx in zip(labels, idxs)]))
     grid = pipe_grid_clf(docs_to_X(X_train), y_train)
 
