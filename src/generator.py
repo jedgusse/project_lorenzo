@@ -4,10 +4,15 @@ import os
 import random
 import copy
 import multiprocessing
+import functools
+import operator
+from collections import defaultdict, Counter
 
 from joblib import Parallel, delayed
 
 import torch.nn as nn
+
+import numpy as np
 
 from seqmod.modules import LM
 from seqmod.misc.trainer import LMTrainer
@@ -17,7 +22,7 @@ from seqmod.misc.dataset import BlockDataset, Dict
 from seqmod.utils import save_model, load_model
 
 from src.data import DataReader
-from src.utils import generate_docs, crop_docs
+from src.utils import generate_docs, crop_docs, sample
 
 
 def make_generator_hook(max_words=100):
@@ -32,7 +37,65 @@ def make_generator_hook(max_words=100):
     return hook
 
 
-class LMGenerator(LM):
+class BasisGenerator(object):
+    def fit(self, examples, d, *args, **kwargs):
+        raise NotImplementedError
+
+    @staticmethod
+    def fit_vocab(examples, max_size=None, min_freq=1):
+        d = Dict(eos_token='<eos>', bos_token='<bos>', force_unk=False,
+                 max_size=max_size, min_freq=min_freq)
+        d.fit(examples)
+        return d
+
+    def copy(self):
+        return copy.deepcopy(self)
+
+    def save(self, path):
+        save_model(self, path, mode='pickle')
+
+    def generate_doc(self, max_words=2000, max_sent_len=200, reset_every=10,
+                     max_tries=5, **kwargs):
+        """
+        Parameters
+        ===========
+        max_words : int, max number of words in the output document
+        max_sent_len : int, max number of characters per generated sentence
+        reset_every : int, number of sentences to wait until resetting hidden
+            state with the encoding of a randomly selected training sentence
+        max_tries : int, number of attempts at generating a well-formed sent
+            before returning (well-formed meaning that it ends with <eos>).
+        kwargs : rest arguments passed onto LM.generate
+        """
+
+        def generate_sent(max_tries=5, **kwargs):
+            tries, hyp = 0, []
+            while (not hyp or hyp[-1] != self.d.get_eos()) and tries < max_tries:
+                tries += 1
+                scores, hyps = self.generate(
+                    self.d, max_seq_len=max_sent_len, **kwargs)
+                score, hyp = scores[0], hyps[0]
+            sent = ''.join(self.d.vocab[c] for c in hyp)
+            sent = sent.replace('<bos>', '').replace('<eos>', '')
+            return sent, score
+
+        sent, score = generate_sent(max_tries=max_tries, **kwargs)
+        seed_text, doc, words, scores = None, [sent], 0, [score]
+        while words < max_words:
+            kwargs.update({'seed_text': seed_text})  # use user seed only once
+            sent, sent_score = generate_sent(max_tries=max_tries, **kwargs)
+            doc.append(sent)
+            words += len(sent.split())
+            scores.append(sent_score)
+            if len(doc) % reset_every == 0:
+                # reset seed to randomly picked training sentence
+                sent_idx = random.randint(0, len(self.examples) - 1)
+                seed_text = self.examples[sent_idx]
+
+        return doc, sum(scores) / len(scores)
+
+
+class LMGenerator(LM, BasisGenerator):
     """
     Wrapper training and generating class for LM
 
@@ -65,7 +128,7 @@ class LMGenerator(LM):
             optim_method='SGD', lr=1., max_norm=5.,
             start_decay_at=15, decay_every=5, lr_decay=0.8,
             # other parameters
-            gpu=False, verbose=True, add_hook=False):
+            gpu=False, verbose=True, add_hook=False, **kwargs):
         """
         Parameters
         ===========
@@ -79,7 +142,6 @@ class LMGenerator(LM):
         epochs : int
         """
         self.d = d
-        self.gpu = gpu
         self.examples = examples
         train, valid = BlockDataset(
             examples, self.d, batch_size, bptt, gpu=gpu).splits(
@@ -101,56 +163,62 @@ class LMGenerator(LM):
             self.cuda()
         trainer.train(epochs, checkpoint=checkpoints_per_epoch, gpu=gpu)
 
-    @staticmethod
-    def fit_vocab(examples, max_size=None, min_freq=1):
-        d = Dict(eos_token='<eos>', bos_token='<bos>', force_unk=False,
-                 max_size=max_size, min_freq=min_freq)
-        d.fit(examples)
-        return d
-
     def copy(self):
         self.cpu()     # ensure model is in cpu to avoid exploding gpu
-        return copy.deepcopy(self)
+        return super(self, LMGenerator).copy()
 
-    def generate_doc(self, max_words=2000, max_sent_len=200, reset_every=10,
-                     max_tries=5, **kwargs):
-        """
-        Parameters
-        ===========
-        max_words : int, max number of words in the output document
-        max_sent_len : int, max number of characters per generated sentence
-        reset_every : int, number of sentences to wait until resetting hidden
-            state with the encoding of a randomly selected training sentence
-        max_tries : int, number of attempts at generating a well-formed sent
-            before returning (well-formed meaning that it ends with <eos>).
-        kwargs : rest arguments passed onto LM.generate
-        """
+    def save(self, path):
+        save_model(self, path)
 
-        def generate_sent(max_tries=5, **kwargs):
-            tries, hyp = 0, []
-            while (not hyp or hyp[-1] != self.d.eos_token) and tries < max_tries:
-                tries += 1
-                scores, hyps = self.generate(
-                    self.d, max_seq_len=max_sent_len, gpu=self.gpu, **kwargs)
-                score, hyp = scores[0], hyps[0]
-            sent = ''.join(self.d.vocab[c] for c in hyp)
-            sent = sent.replace('<bos>', '').replace('<eos>', '')
-            return sent, score
 
-        sent, score = generate_sent(max_tries=max_tries, **kwargs)
-        seed_text, doc, words = None, [sent], 0
-        while words < max_words:
-            kwargs.update({'seed_text': seed_text})  # use user seed only once
-            sent, sent_score = generate_sent(max_tries=max_tries, **kwargs)
-            doc.append(sent)
-            words += len(sent.split())
-            score += sent_score
-            if len(doc) % reset_every == 0:
-                # reset seed to randomly picked training sentence
-                sent_idx = random.randint(0, len(self.examples) - 1)
-                seed_text = self.examples[sent_idx]
+class UnsmoothedLMGenerator(BasisGenerator):
+    """
+    Adapted from https://gist.github.com/yoavg/d76121dfde2618422139
+    """
+    def __init__(self, order=6):
+        self.order = order
+        self.lm = defaultdict(Counter)
+        self.pad_token = '<bos>'
 
-        return doc, score
+    def fit(self, examples, d, *args, **kwargs):
+        self.examples = examples
+        data = [c for l in d.transform(examples) for c in l]
+        data = [d.index(self.pad_token)] * self.order + data
+        self.d = d
+
+        for i in range(len(data) - self.order):
+            history, char = data[i:i+self.order], data[i+self.order]
+            self.lm[tuple(history)][char] += 1
+
+        def normalize(counter):
+            s = float(sum(counter.values()))
+            return [(c, cnt/s) for c, cnt in counter.items()]
+
+        self.lm = {hist: normalize(chars) for hist, chars in self.lm.items()}
+
+    def generate_char(self, seed, d):
+        seed = seed[-self.order:]  # seed is ints
+        dist = self.lm[tuple(seed)]
+        values, probs = zip(*dist)
+        idx = sample(np.array(list(probs)))
+        score, char = probs[idx], values[idx]
+        return score, char
+
+    def generate(self, d, seed_text=None, max_seq_len=200, **kwargs):
+        hyp, scores = [], []
+        if seed_text is None or len(seed_text) < self.order:
+            # seed is chars
+            seed_text = [d.index(self.pad_token)] * self.order
+        else:
+            seed_text = [d.index(c) for c in seed_text][:self.order]
+            hyp = seed_text
+        for i in range(max_seq_len):
+            score, char = self.generate_char(seed_text, d)
+            seed_text = seed_text[-self.order:] + [char]
+            hyp.append(char), scores.append(score)
+            if char == d.get_eos():
+                break
+        return [functools.reduce(operator.mul, scores)], [hyp]
 
 
 if __name__ == '__main__':
@@ -175,6 +243,8 @@ if __name__ == '__main__':
     parser.add_argument('--gpu', action='store_true')
     parser.add_argument('--add_hook', action='store_true')
     # model
+    parser.add_argument('--use_ngram_lm', action='store_true')
+    parser.add_argument('--order', type=int, default=6)
     parser.add_argument('--emb_dim', default=24, type=int)
     parser.add_argument('--hid_dim', default=200, type=int)
     parser.add_argument('--num_layers', default=2, type=int)
@@ -186,7 +256,8 @@ if __name__ == '__main__':
     X_authors, _, X_train = train             # ignore titles
     if args.max_words_train:
         X_train = list(crop_docs(X_train, max_words=args.max_words_train))
-    fitted_d = LMGenerator.fit_vocab([sent for doc in X_train for sent in doc])
+    fitted_d = BasisGenerator.fit_vocab(
+        [sent for doc in X_train for sent in doc])
     vocab = len(fitted_d)
 
     # training
@@ -195,8 +266,12 @@ if __name__ == '__main__':
 
     model_authors = {}
     for author in set(X_authors):
-        generator = LMGenerator(
-            vocab, args.emb_dim, args.hid_dim, args.num_layers, dropout=0.3)
+        if args.use_ngram_lm:
+            generator = UnsmoothedLMGenerator(args.order)
+        else:
+            generator = LMGenerator(
+                vocab, args.emb_dim, args.hid_dim, args.num_layers,
+                dropout=0.3)
         examples = [sent for doc_author, doc in zip(X_authors, X_train)
                     for sent in doc if doc_author == author]
         n_words, n_sents = sum(len(s.split()) for s in examples), len(examples)
@@ -205,10 +280,13 @@ if __name__ == '__main__':
             generator.fit(
                 examples, fitted_d, args.batch_size, args.bptt, args.epochs,
                 gpu=args.gpu, add_hook=args.add_hook)
-            generator.eval()        # set to validation mode
+            suffix = '.pkl'
+            if not args.use_ngram_lm:
+                generator.eval()        # set to validation mode
+                suffix = '.pt'
             model_path = '%s/%s' % (args.save_path, '_'.join(author.split()))
-            save_model(generator, model_path)
-            model_authors[author] = model_path + ".pt"
+            generator.save(model_path)
+            model_authors[author] = model_path + suffix
         except Exception as e:
             print("Couldn't train %s. Exception: %s" % (author, str(e)))
 

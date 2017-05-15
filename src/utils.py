@@ -1,5 +1,6 @@
 
 import os
+import numpy as np
 
 
 def generate_docs(generator, author, nb_docs, max_words,
@@ -39,3 +40,9 @@ def crop_doc(doc, max_words):
 def crop_docs(docs, max_words=float('inf')):
     for doc in docs:
         yield crop_doc(doc, max_words)
+
+
+def sample(a, temperature=1.0):
+    a = np.log(a) / temperature
+    a = np.exp(a) / np.sum(np.exp(a))
+    return np.argmax(np.random.multinomial(1, a, 1))
