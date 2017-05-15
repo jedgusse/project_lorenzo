@@ -15,21 +15,6 @@ READERS = {'PL': readers.patrologia_reader,
            'PackHum': readers.packhum_reader}
 
 
-def crop_doc(doc, max_words):
-    words, sents = 0, []
-    for sent in doc:
-        words += len(sent.split())
-        sents.append(sent)
-        if words >= max_words:
-            break
-    return sents
-
-
-def crop_docs(docs, max_words=float('inf')):
-    for doc in docs:
-        yield crop_doc(doc, max_words)
-
-
 class DataReader(object):
     def __init__(self, name='PL', foreground_authors=None):
         super(DataReader, self).__init__()
@@ -108,7 +93,7 @@ class DataReader(object):
                 if kwargs:
                     logging.warn("Loaded reader doesn't allow changing " +
                                  "split params and params will be ignored." +
-                                 "Current values are " + \
+                                 "Current values are " +
                                  '\n'.join(['{}: {}'.format(k, v)
                                             for k, v in obj.items()
                                             if k not in ('splits', 'name')]))

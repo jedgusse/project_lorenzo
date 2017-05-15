@@ -1,9 +1,8 @@
 #!/usr/bin/env
 
+import json
 from pprint import pprint
 import os
-from joblib import Parallel, delayed
-import multiprocessing
 
 import numpy as np
 from scipy import stats
@@ -13,12 +12,9 @@ from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.preprocessing import (
     Normalizer, StandardScaler, FunctionTransformer)
-from sklearn.metrics import classification_report
+from sklearn.metrics import precision_recall_fscore_support
 
-from seqmod.utils import load_model
-
-from src.utils import generate_docs, docs_to_X
-from src.generator import LMGenerator
+from src.utils import docs_to_X, crop_docs
 from src.data import DataReader
 
 
@@ -96,118 +92,92 @@ def pipe_grid_clf(X_train, y_train):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('path', help='Top directory containing reader ' +
-                        'and generators as per generator.py')
-    parser.add_argument('--generated_path',
-                        help='Path to generated files. Filename in format: ' +
-                        'authorname_docnum.txt. It will be used as target ' +
-                        'write dir if save_generated is passed or as target ' +
-                        'read dir if load_generated is passed.')
-    parser.add_argument('--reader_path', help='Custom reader path.')
-    parser.add_argument('--save_generated', action='store_true',
-                        help='Whether to save the generated texts')
-    parser.add_argument('--load_generated', action='store_true')
-    parser.add_argument('--nb_docs', default=10, type=int,
-                        help='Number of generated docs per author')
-    parser.add_argument('--max_words', default=2000, type=int,
-                        help='Number of words per generated doc')
+    parser.add_argument('path', help='Top directory containing reader, ' +
+                        'generators, and generated docs as per generator.py')
+    parser.add_argument('--reader_path', help='Custom reader path')
+    parser.add_argument('--generated_path', help='Custom generated docs path')
+    parser.add_argument('--max_words_train', default=False, type=int,
+                        help='Number of words used per training/classify doc')
     args = parser.parse_args()
-    assert not (args.save_generated and not args.generated_path), \
-        "--save_generated requires --generated_path"
-    assert not (args.load_generated and not args.generated_path), \
-        "--load_generated requires --generated_path"
 
-    # 1 Load discriminator data and generator models/data
-    reader_path, generators = None, {}
+    # 1 Load generated documents
+    X_gen, y_gen = [], []
+    if args.generated_path is not None:
+        generated_path = args.generated_path
+    else:                       # use default generated path
+        generated_path = os.path.join(args.path, 'generated')
+    for fname in os.listdir(generated_path):
+        author = fname.split('.')[0].replace('_', ' ')
+        with open(os.path.join(generated_path, fname), 'r') as f:
+            doc = [line.strip() for line in f]
+        X_gen.append(doc), y_gen.append(author)
+    assert len(X_gen), "Couldn't find generated docs in %s" % generated_path
+    gen_authors = set(y_gen)
+
+    # 2 Load real docs from reader
+    reader_path = None
+    if args.reader_path:        # load reader from custom path
+        reader_path = args.reader_path
     for f in os.listdir(args.path):
         if f.endswith('pkl'):   # reader path
             reader_path = os.path.join(args.path, f)
-        elif f.endswith('pt'):  # generator path
-            basename = os.path.splitext(os.path.basename(f))[0]
-            author = ' '.join(basename.split('_'))
-            generators[author] = os.path.join(args.path, f)
-
-    if args.reader_path:        # load reader from custom path
-        reader_path = args.reader_path
-
     if not reader_path:
         raise ValueError("Couldn't find reader in dir [%s]" % args.path)
-
-    # generate (or load) generated documents
-    X_gen, y_gen = [], []
-
-    if args.load_generated:     # load generated documents
-        assert not args.generated_path or os.path.isdir(args.generated_path), \
-            "argument to --generated_path is not a valid path"
-        for fname in os.listdir(args.generated_path):
-            author = fname.split('.')[0].replace('_', ' ')
-            doc = []
-            with open(os.path.join(args.generated_path, fname), 'r') as f:
-                for line in f:
-                    doc.append(line.strip())
-            X_gen.append(doc), y_gen.append(author)
-    else:                       # generate documents
-        if args.save_generated and not os.path.isdir(args.generated_path):
-            os.mkdir(args.generated_path)
-        num_cores = multiprocessing.cpu_count()
-        results = Parallel(n_jobs=num_cores)(
-            delayed(generate_docs)(
-                load_model(fpath), author, args.nb_docs, args.max_words,
-                save=args.save_generated, path=args.generated_path)
-            for author, fpath in generators.items())
-        for docs, author in results:
-            X_gen.extend(docs)
-            y_gen.extend([author for __ in range(len(docs))])
-        """
-        # Single-threaded code
-        for author, fpath in generators.items():
-            generator = load_model(fpath)
-            docs, _ = generate_docs(
-                generator, author, args.nb_docs, args.max_words,
-                save=args.save_generated, path=args.generated_path)
-            X_gen.extend(docs)
-            y_gen.extend([author for _ in range(len(docs))])
-        """
-
-    # 2 Compute best estimator on real data
     reader = DataReader.load(reader_path)
     test, train, _ = reader.foreground_splits()  # use gener split as test
     (y_train, _, X_train), (y_test, _, X_test) = train, test
-
-    # remove authors with no generator (because training failed)
+    if args.max_words_train:
+        X_train = list(crop_docs(X_train, max_words=args.max_words_train))
+    # remove authors with no generator (because of missing docs)
     for idx, y in enumerate(y_train):
-        if y not in generators:
+        if y not in gen_authors:
             del y_train[idx]
             del X_train[idx]
     for idx, y in enumerate(y_test):
-        if y not in generators:
+        if y not in gen_authors:
             del y_test[idx]
             del X_test[idx]
-
     # translate author names to labels
     le = preprocessing.LabelEncoder()
-    y_train = le.fit_transform(y_train)
-    print("::: Encoded labels :::")
-    labels = list(generators.keys())
-    idxs = le.transform(labels)
-    print('\n'.join(['%s: %d' % (l, idx) for l, idx in zip(labels, idxs)]))
-    grid = pipe_grid_clf(docs_to_X(X_train), y_train)
+    le.fit(y_train)
 
-    # make prediction with the best parameters
-    best_model = grid.best_estimator_
-    best_params = grid.best_params_
-    accuracy = grid.best_score_ * 100
-    prediction = grid.predict(docs_to_X(X_test))
+    # 3 Train estimator on real data and generated data
+    grid_real = pipe_grid_clf(docs_to_X(X_gen), le.transform(y_gen))
+    grid_gen = pipe_grid_clf(docs_to_X(X_train), le.transform(y_train))
 
-    print("::: Best model :::")
-    pprint(best_model)
-    print("::: Best model params :::")
-    pprint(best_params)
-    print("::: CV Accuracy :::", "%g" % accuracy)
-    print("::: Classification report :::")
-    print(classification_report(le.transform(y_test), prediction))
+    # 4 Test estimator on real and generated docs and save
+    def run_test(grid, path, X_in, y_in, X_out, y_out, le):
+        best_model = grid.best_estimator_
+        best_params = grid.best_params_
+        in_pred = grid.predict(docs_to_X(X_in))
+        out_pred = grid.predict(docs_to_X(X_out))
 
-    # 3 Test estimator on generated docs
-    gen_pred = grid.predict(docs_to_X(X_gen))
-    print("::: Generation classification report :::")
-    print(classification_report(le.transform(y_gen), gen_pred))
+        if not os.path.isdir(path):
+            os.mkdir(path)
+
+        def dump_report(y_true, y_pred, path, le):
+            p, r, f1, s = precision_recall_fscore_support(y_true, y_pred)
+            report = []
+            for i in range(len(set(y_true))):
+                report.append(
+                    {'author': le.inverse_transform(i),
+                     'result': {'precision': p[i],
+                                'recall': r[i],
+                                'f1': f1[i],
+                                'support': int(s[i])}})
+            with open(path, 'w') as f:
+                json.dump(report, f)
+
+        out_report_path = os.path.join(path, 'report_out.json')
+        dump_report(le.transform(y_out), out_pred, out_report_path, le)
+        in_report_path = os.path.join(path, 'report_in.json')
+        dump_report(le.transform(y_in), in_pred, in_report_path, le)
+        with open(os.path.join(path, 'best_model.txt'), 'w') as f:
+            pprint(best_model, stream=f)
+        with open(os.path.join(path, 'best_params.json'), 'w') as f:
+            json.dump({k: str(v) for k, v in best_params.items()}, f)
+
+    class_path = os.path.join(args.path, 'classification')
+    run_test(grid_real, class_path, X_test, y_test, X_gen, y_gen, le)
+    gen_path = os.path.join(args.path, 'augmentation')
+    run_test(grid_gen, gen_path, X_gen, y_gen, X_test, y_test, le)

@@ -24,3 +24,18 @@ def docs_to_X(docs):
     Joins sentences in a collection of documents
     """
     return [' '.join(doc) for doc in docs]
+
+
+def crop_doc(doc, max_words):
+    words, sents = 0, []
+    for sent in doc:
+        words += len(sent.split())
+        sents.append(sent)
+        if words >= max_words:
+            break
+    return sents
+
+
+def crop_docs(docs, max_words=float('inf')):
+    for doc in docs:
+        yield crop_doc(doc, max_words)
