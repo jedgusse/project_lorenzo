@@ -26,6 +26,7 @@ except:
 
 def detokenizer(tokens):
     post_punc, pre_punc = {';', '.', ',', ':', '?', '!', ')'}, {'('}
+
     def func(acc, x):
         if x in post_punc:
             return acc + x
@@ -79,7 +80,7 @@ def packhum_reader(root=ROOT_FOLDER, include=(), exclude=(),
 
     root : str, top folder of the processed data
     exclude : tuple of str, authors to skip when reading. Note that
-        author names are determined by the file name substituting 
+        author names are determined by the file name substituting
         underscores `_` with blankspaces ` `.
     indlude : tuple of str, authors to include when reading.
     """
