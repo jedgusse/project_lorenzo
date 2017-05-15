@@ -1,19 +1,49 @@
 #!/usr/bin/env
 
+import argparse
+from binascii import hexlify
+import colorsys
 from itertools import combinations
+import glob
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
-from scipy.spatial import Voronoi, voronoi_plot_2d
-from sklearn import metrics
-from sklearn import svm
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.decomposition import PCA
-from sklearn.neighbors import NearestNeighbors
-from sklearn.manifold import TSNE
-from sklearn.decomposition import TruncatedSVD
-from sklearn.neighbors.classification import KNeighborsClassifier
-from sklearn.linear_model.logistic import LogisticRegression
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import (Normalizer,
+                                   StandardScaler,
+                                   FunctionTransformer)
+from string import punctuation
+
+def discrete_cmap(N, base_cmap=None):
+    """Create an N-bin discrete colormap from the specified input map"""
+
+    # Note that if base_cmap is a string or None, you can simply do
+    #    return plt.cm.get_cmap(base_cmap, N)
+    # The following works for string, None, or a colormap instance:
+
+    base = plt.cm.get_cmap(base_cmap)
+    color_list = base(np.linspace(0, 1, N))
+    cmap_name = base.name + str(N)
+    return base.from_list(cmap_name, color_list, N)
+
+def align_yaxis(ax1, v1, ax2, v2):
+	"""adjust ax2 ylimit so that v2 in ax2 is aligned to v1 in ax1"""
+	_, y1 = ax1.transData.transform((0, v1))
+	_, y2 = ax2.transData.transform((0, v2))
+	inv = ax2.transData.inverted()
+	_, dy = inv.transform((0, 0)) - inv.transform((0, y1-y2))
+	miny, maxy = ax2.get_ylim()
+	ax2.set_ylim(miny+dy, maxy+dy)
+
+def align_xaxis(ax1, v1, ax2, v2):
+	"""adjust ax2 ylimit so that v2 in ax2 is aligned to v1 in ax1"""
+	x1, _ = ax1.transData.transform((v1, 0))
+	x2, _ = ax2.transData.transform((v2, 0))
+	inv = ax2.transData.inverted()
+	dx, _ = inv.transform((0, 0)) - inv.transform((x1-x2, 0))
+	minx, maxx = ax2.get_xlim()
+	ax2.set_xlim(minx+dx, maxx+dx)
 
 class PrinCompAnal:
 
@@ -29,9 +59,6 @@ class PrinCompAnal:
 
 		# Normalizer and Delta perform badly
 		# They flatten out all difference in a PCA plot
-
-		colours = {'GilPoit': '#6190FF', 'GuibNog': '#A4CDFF', 'Bern': '#FF4F46', 'div': '#FF9181', '5': '#FFC3A4', 'n': '#3FD121', 'hugo': '#D157B5', 'h': '#D157B5', 
-		   'JohnSal': '#6190FF', 'ro': '#000000', 'NicCl': '#dc1818', 'AnsLaon': '#dc1818', '...': '#dc1818', 'lec': '#D157B5', 'JohnSal': '#D157B5', 'WilConch': '#3FD121'}
 		
 		pca = PCA(n_components=self.n_components)
 		X_bar = pca.fit_transform(self.X)
@@ -41,6 +68,10 @@ class PrinCompAnal:
 		loadings = pca.components_.transpose()
 		vocab_weights_p1 = sorted(zip(self.features, comps[:,0]), key=lambda tup: tup[1], reverse=True)
 		vocab_weights_p2 = sorted(zip(self.features, comps[:,1]), key=lambda tup: tup[1], reverse=True)
+
+		# Generate color dictionary
+		color_dict = {author:index for index, author in enumerate(set(self.authors))}
+		cmap = discrete_cmap(len(color_dict), base_cmap='rainbow')
 
 		print("Explained variance: ", sum(pca.explained_variance_ratio_)*100)
 
@@ -54,13 +85,11 @@ class PrinCompAnal:
 
 			exclusion_list = []
 
-			ax.scatter(x1, x2, 100, edgecolors='none', facecolors='none')
-			for p1, p2, a, title in zip(x1, x2, self.authors, self.titles):
+			ax.scatter(x1, x2, 100, edgecolors='none', facecolors='none', cmap='rainbow')
+			for index, (p1, p2, a, title) in enumerate(zip(x1, x2, self.authors, self.titles)):
 				if a not in exclusion_list:
-					ax.text(p1, p2, title[:2] + '_' + title.split("_")[1], ha='center',
-				    va='center', color=colours[a], fontdict={'size': 7})
-			ax.set_xlabel('PC1')
-			ax.set_ylabel('PC2')
+					ax.text(p1, p2, title[:2] + '_' + title.split("_")[0], ha='center',
+				    va='center', color=cmap(color_dict[a]), fontdict={'size': 7})
 
 			# Legend settings (code for making a legend)
 
@@ -73,7 +102,12 @@ class PrinCompAnal:
 				ax2.scatter(l1, l2, 100, edgecolors='none', facecolors='none');
 				for x, y, l in zip(l1, l2, self.features):
 					ax2.text(x, y, l, ha='center', va="center", color="black",
-					fontdict={'family': 'Arial', 'size': 10})
+					fontdict={'family': 'Arial', 'size': 6})
+
+				# Align axes
+
+				align_xaxis(ax, 0, ax2, 0)
+				align_yaxis(ax, 0, ax2, 0)
 			
 			elif show_loadings == False:
 				print("No loadings in PCA")
@@ -97,7 +131,7 @@ class PrinCompAnal:
 			ax2.scatter(l1, l2, 100, edgecolors='none', facecolors='none')
 			for x, y, l in zip(l1, l2, features):
 				ax2.text(x, y, l, ha='center', va='center', color='black',
-					fontdict={'family': 'Arial', 'size': 10})
+					fontdict={'family': 'Arial', 'size': 6})
 
 			ax2.set_xlabel('PC1')
 			ax2.set_ylabel('PC2')
@@ -107,9 +141,6 @@ class PrinCompAnal:
 
 			plt.show()
 
-			fig.savefig("/Users/jedgusse/compstyl/output/fig_output/pcafig.pdf", 
-						transparent=True, 
-						format='pdf')
 			# Converting PDF to PNG, use pdftoppm in terminal and -rx -ry for resolution settings
 
 class GephiNetworks:
@@ -134,8 +165,8 @@ class GephiNetworks:
 		# Calculates Nearest Neighbours of each txt sample.
 		# Outputs distances
 
-		fob_nodes = open("/Users/jedgusse/compstyl/output/gephi_output/gephi_nodes.txt", "w")
-		fob_edges = open("/Users/jedgusse/compstyl/output/gephi_output/gephi_edges.txt", "w")
+		fob_nodes = open("", "w")
+		fob_edges = open("", "w")
 
 		fob_nodes.write("Id" + "\t" + "Work" + "\t" + "Author" + "\n")
 		fob_edges.write("Source" + "\t" + "Target" + "\t" + "Type" + "\t" + "Weight" + "\n")
@@ -176,3 +207,67 @@ class GephiNetworks:
 				fob_edges.write(str(index+1) + "\t" + str(nearest_text[num][3]) + "\t" + "Undirected" + "\t" + str(nearest_text[num][2]) + "\n")
 
 		return distances, indices
+
+if __name__ == '__main__':
+	# Instantiate parser
+	parser = argparse.ArgumentParser()
+
+	# Instantiate arguments (obligatory or optional (e.g. --n_components))
+	parser.add_argument("path")
+	parser.add_argument("--sample_size", type=int, default=2000, help='Please enter length of samples')
+	parser.add_argument("--max_features", type=int, default=150)
+	
+	# Call arguments
+	args = parser.parse_args()
+
+	# Load corpus from path that is specified
+
+	authors = []
+	titles = []
+	texts = []
+
+	for filename in glob.glob(args.path + '/*'):
+		author = filename.split("/")[-1].split(".")[0].split("_")[0]
+		title = filename.split("/")[-1].split(".")[0].split("_")[1]
+
+		bulk = []
+
+		fob = open(filename)
+		text = fob.read()
+		for word in text.rstrip().split():
+			for char in word:
+				if char in punctuation:
+					word = word.replace(char, "")
+			word = word.lower()
+			bulk.append(word)
+		bulk = [bulk[i:i+args.sample_size] for i in range(0, len(bulk), args.sample_size)]
+
+		for index, sample in enumerate(bulk):
+			if len(sample) == args.sample_size:
+				authors.append(author)
+				titles.append(title + "_{}".format(str(index + 1)))
+				texts.append(" ".join(sample))
+
+	# Vectorize and normalize corpus as best-ranked in SVM
+	
+	model = TfidfVectorizer(max_features=args.max_features)
+	tfidf_vectors = model.fit_transform(texts).toarray()
+	features = model.get_feature_names()
+
+	# Rank feature list and tfidf_vectors in order
+	# corpus_vector sums up all tfidf_vectors and yield highest values for most occurring features
+	corpus_vector = np.ravel(np.sum(tfidf_vectors, axis=0))
+	mfwords = [x for (y,x) in sorted(zip(corpus_vector, features), reverse=True)]
+	ordered_X = []
+	for word in mfwords:
+		for feature, freq in zip(features, tfidf_vectors.transpose()):
+			if word == feature:
+				ordered_X.append(freq)
+	tfidf_vectors = np.array(ordered_X).transpose()
+
+	# Normalize counts
+	tfidf_normalized = StandardScaler().fit_transform(tfidf_vectors)
+
+	PrinCompAnal(authors, titles, tfidf_normalized, mfwords, 2).plot(show_samples=True, show_loadings=True)
+
+
