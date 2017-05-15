@@ -25,7 +25,7 @@ python -u -m src.generator \
 	   --reader_path $EXP_PATH/reader.pkl \
     	   --save_path $EXP_PATH \
 	   --generate \
-	   # --gpu \
+	   --gpu \
 	   --epochs 50 >> $EXP_PATH/train.log 2>&1
 
 echo "Training classifier"

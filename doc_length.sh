@@ -26,7 +26,7 @@ for MAX_WORD in "${MAX_WORDS[@]}"; do
 	   --reader_path $LOAD_PATH.pkl \
     	   --save_path experiments/$MAX_WORD \
 	   --generate \
-	   # --gpu
+	   --gpu
 	   --epochs 75 \
 	   --max_words $MAX_WORD >> experiments/$MAX_WORD.train.log 2>&1
     echo "Training classifier"
