@@ -3,6 +3,9 @@
 import os
 import random
 import copy
+import multiprocessing
+
+from joblib import Parallel, delayed
 
 import torch.nn as nn
 
@@ -11,7 +14,10 @@ from seqmod.misc.trainer import LMTrainer
 from seqmod.misc.optimizer import Optimizer
 from seqmod.misc.loggers import StdLogger
 from seqmod.misc.dataset import BlockDataset, Dict
-from seqmod.utils import save_model
+from seqmod.utils import save_model, load_model
+
+from src.data import DataReader
+from src.utils import generate_docs, crop_docs
 
 
 def make_generator_hook(max_words=100):
@@ -115,7 +121,7 @@ class LMGenerator(LM):
         max_sent_len : int, max number of characters per generated sentence
         reset_every : int, number of sentences to wait until resetting hidden
             state with the encoding of a randomly selected training sentence
-        max_tries : int, number of attempts at generating a well-formed sentence
+        max_tries : int, number of attempts at generating a well-formed sent
             before returning (well-formed meaning that it ends with <eos>).
         kwargs : rest arguments passed onto LM.generate
         """
@@ -151,17 +157,17 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     # data
-    parser.add_argument('--subset', default='PL')
-    parser.add_argument('--crop_docs', default=False, type=int,
-                        help='Maximum nb of words per document')
-    parser.add_argument('--foreground_authors',
-                        default=('Augustinus Hipponensis',
-                                 'Hieronymus Stridonensis',
-                                 'Bernardus Claraevallensis',
-                                 'Walafridus Strabo'),
-                        type=lambda args: args.split(','))
-    parser.add_argument('--save_path', default='')
-    parser.add_argument('--load_data', default='')
+    parser.add_argument('--reader_path', required=True)
+    parser.add_argument('--save_path', required=True)
+    parser.add_argument('--max_words', default=2000, type=int,
+                        help='Number of words per generated doc')
+    parser.add_argument('--max_words_train', default=False, type=int,
+                        help='Crop train docs to this number of words')
+    parser.add_argument('--generate', action='store_true',
+                        help='Whether to generate and store docs. ' +
+                        'Text will be stored to save_path/generated')
+    parser.add_argument('--nb_docs', type=int, default=10,
+                        help='Number of generated docs per author')
     # train
     parser.add_argument('--batch_size', default=50, type=int)
     parser.add_argument('--bptt', default=50, type=int)
@@ -174,30 +180,20 @@ if __name__ == '__main__':
     parser.add_argument('--num_layers', default=2, type=int)
     args = parser.parse_args()
 
-    from data import DataReader, crop_docs
-    if args.load_data:
-        reader = DataReader.load(args.load_data)
-    else:
-        reader = DataReader(
-            name=args.subset, foreground_authors=args.foreground_authors)
+    # load data
+    reader = DataReader.load(args.reader_path)
     train, _, _ = reader.foreground_splits()  # take gener split
     X_authors, _, X_train = train             # ignore titles
-    if args.crop_docs:
-        X_train = list(crop_docs(X_train, max_words=args.crop_docs))
+    if args.max_words_train:
+        X_train = list(crop_docs(X_train, max_words=args.max_words_train))
     fitted_d = LMGenerator.fit_vocab([sent for doc in X_train for sent in doc])
     vocab = len(fitted_d)
 
-    subpath = 'experiments/%s' % args.save_path
-    if not os.path.isdir(subpath):
-        os.mkdir(subpath)
-    if args.save_path and not args.load_data:  # only save if not loaded
-        # save reader (with splits)
-        authors = ['-'.join(author.replace('.', '').split())
-                   for author in args.foreground_authors]
-        fname = '{name}.{foreground_authors}'.format(
-            name=args.subset, foreground_authors='_'.join(authors))
-        reader.save(os.path.join(subpath, fname))
+    # training
+    if not os.path.isdir(args.save_path):
+        os.mkdir(args.save_path)
 
+    model_authors = {}
     for author in set(X_authors):
         generator = LMGenerator(
             vocab, args.emb_dim, args.hid_dim, args.num_layers, dropout=0.3)
@@ -210,8 +206,19 @@ if __name__ == '__main__':
                 examples, fitted_d, args.batch_size, args.bptt, args.epochs,
                 gpu=args.gpu, add_hook=args.add_hook)
             generator.eval()        # set to validation mode
-            if args.save_path:
-                model_path = '%s/%s' % (subpath, '_'.join(author.split()))
-                save_model(generator, model_path)
+            model_path = '%s/%s' % (args.save_path, '_'.join(author.split()))
+            save_model(generator, model_path)
+            model_authors[author] = model_path + ".pt"
         except Exception as e:
             print("Couldn't train %s. Exception: %s" % (author, str(e)))
+
+    # generation
+    if args.generate:
+        generated_path = '%s/generated/' % args.save_path
+        if not os.path.isdir(generated_path):
+            os.mkdir(generated_path)
+        Parallel(n_jobs=multiprocessing.cpu_count())(
+            delayed(generate_docs)(
+                load_model(fpath), author, args.nb_docs, args.max_words,
+                save=True, path=generated_path)
+            for author, fpath in model_authors.items())
