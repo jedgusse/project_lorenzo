@@ -8,7 +8,7 @@ import multiprocessing
 import numpy as np
 from scipy import stats
 from sklearn import svm, preprocessing
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, LeaveOneOut
 from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.preprocessing import (
@@ -74,6 +74,8 @@ def pipe_grid_clf(X_train, y_train):
     # Therefore C is the penalty parameter of the error term.
     c_options = [1, 10, 100, 1000]
     kernel_options = ['linear', 'poly', 'rbf', 'sigmoid']
+    analyzer_options = ['char_wb']
+    ngram_range_options = [(2,2), (3,3), (4,4)]
 
     param_grid = [
         {
@@ -84,12 +86,23 @@ def pipe_grid_clf(X_train, y_train):
             'classifier__C': c_options,
             'classifier__kernel': kernel_options,
         },
+        {
+            'vectorizer': [CountVectorizer(), TfidfVectorizer()],
+            'vectorizer__analyzer': analyzer_options,
+            'vectorizer__ngram_range': ngram_range_options,
+            'feature_scaling': [StandardScaler(),
+                                Normalizer(),
+                                FunctionTransformer(deltavectorizer)],
+            'classifier__C': c_options,
+            'classifier__kernel': kernel_options,
+        },
     ]
+    
     # Stratification is default
     # For integer/None inputs for cv, if the estimator is a classifier
     # and y is either binary or multiclass, StratifiedKFold is used.
     # In all other cases, KFold is used.
-    grid = GridSearchCV(pipe, cv=2, n_jobs=2, param_grid=param_grid, verbose=1)
+    grid = GridSearchCV(pipe, cv=LeaveOneOut(), n_jobs=2, param_grid=param_grid, verbose=1)
     grid.fit(X_train, y_train)
 
     return grid
