@@ -113,8 +113,6 @@ if __name__ == '__main__':
     parser.add_argument('--generated_path', help='Custom generated docs path')
     parser.add_argument('--max_words_train', default=False, type=int,
                         help='Number of words used per training/classify doc')
-    parser.add_argument('--augmentation', action='store_true',
-                        help='Use generated data as training and test on real')
     args = parser.parse_args()
 
     # 1 Load generated documents
