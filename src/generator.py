@@ -22,7 +22,7 @@ from seqmod.misc.dataset import BlockDataset, Dict
 from seqmod.utils import save_model, load_model
 
 from src.data import DataReader
-from src.utils import generate_docs, crop_docs, sample
+from src.utils import generate_docs, train_generator, crop_docs, sample
 
 
 def make_generator_hook(max_words=100):
@@ -168,6 +168,7 @@ class LMGenerator(LM, BasisGenerator):
         return super(self, LMGenerator).copy()
 
     def save(self, path):
+        self.cpu()
         save_model(self, path)
 
 
@@ -225,7 +226,8 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     # data
-    parser.add_argument('--reader_path', required=True)
+    parser.add_argument('--reader_path',
+                        help='Required if generator_path is not given.')
     parser.add_argument('--save_path', required=True)
     parser.add_argument('--max_words', default=2000, type=int,
                         help='Number of words per generated doc')
@@ -236,6 +238,8 @@ if __name__ == '__main__':
                         'Text will be stored to save_path/generated')
     parser.add_argument('--nb_docs', type=int, default=10,
                         help='Number of generated docs per author')
+    parser.add_argument('--generator_path', help='Path with ' +
+                        'generators for loading (no training involved)')
     # train
     parser.add_argument('--batch_size', default=50, type=int)
     parser.add_argument('--bptt', default=50, type=int)
@@ -250,45 +254,38 @@ if __name__ == '__main__':
     parser.add_argument('--num_layers', default=2, type=int)
     args = parser.parse_args()
 
-    # load data
-    reader = DataReader.load(args.reader_path)
-    train, _, _ = reader.foreground_splits()  # take gener split
-    X_authors, _, X_train = train             # ignore titles
-    if args.max_words_train:
-        X_train = list(crop_docs(X_train, max_words=args.max_words_train))
-    fitted_d = BasisGenerator.fit_vocab(
-        [sent for doc in X_train for sent in doc])
-    vocab = len(fitted_d)
-
-    # training
     if not os.path.isdir(args.save_path):
         os.mkdir(args.save_path)
 
-    model_authors = {}
-    for author in set(X_authors):
-        if args.use_ngram_lm:
-            generator = UnsmoothedLMGenerator(args.order)
-        else:
-            generator = LMGenerator(
-                vocab, args.emb_dim, args.hid_dim, args.num_layers,
-                dropout=0.3)
-        examples = [sent for doc_author, doc in zip(X_authors, X_train)
-                    for sent in doc if doc_author == author]
-        n_words, n_sents = sum(len(s.split()) for s in examples), len(examples)
-        print('Training %s on %d words, %d sents' % (author, n_words, n_sents))
-        try:
-            generator.fit(
-                examples, fitted_d, args.batch_size, args.bptt, args.epochs,
-                gpu=args.gpu, add_hook=args.add_hook)
-            suffix = '.pkl'
-            if not args.use_ngram_lm:
-                generator.eval()        # set to validation mode
-                suffix = '.pt'
-            model_path = '%s/%s' % (args.save_path, '_'.join(author.split()))
-            generator.save(model_path)
-            model_authors[author] = model_path + suffix
-        except Exception as e:
-            print("Couldn't train %s. Exception: %s" % (author, str(e)))
+    model_authors = {} 
+    if args.generator_path is not None:
+        # load generators
+        for f in os.listdir(args.generator_path):
+            if not f.endswith('pt'):
+                continue
+            author = os.path.basename(f).split('.')[0].replace('_', ' ')
+            model_authors[author] = os.path.join(args.generator_path, f)
+    else:
+        # load data
+        reader = DataReader.load(args.reader_path)
+        train, _, _ = reader.foreground_splits()  # take gener split
+        X_authors, _, X_train = train             # ignore titles
+        if args.max_words_train:
+            X_train = list(crop_docs(X_train, max_words=args.max_words_train))
+        fitted_d = BasisGenerator.fit_vocab(
+            [sent for doc in X_train for sent in doc])
+        # train generators
+        for author in set(X_authors):
+            examples = [sent for doc_author, doc in zip(X_authors, X_train)
+                        for sent in doc if doc_author == author]
+            if args.use_ngram_lm:
+                generator = UnsmoothedLMGenerator(args.order)
+            else:
+                generator = LMGenerator(
+            vocab, args.emb_dim, args.hid_dim, args.num_layers, dropout=0.3)
+            n_w, n_s = sum(len(s.split()) for s in examples), len(examples)
+            print('Training %s on %d words, %d sents' % (author, n_w, n_s))
+            train_generator(generator, author, examples, fitted_d, args)
 
     # generation
     if args.generate:

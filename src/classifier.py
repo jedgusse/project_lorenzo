@@ -3,7 +3,7 @@
 import json
 from pprint import pprint
 import os
-
+import multiprocessing
 import numpy as np
 from scipy import stats
 from sklearn import svm, preprocessing
@@ -64,8 +64,8 @@ def pipe_grid_clf(X_train, y_train):
 
     idfs = [True, False]
     c_options = [1, 10, 100, 1000]
-    kernel_options = ['linear', 'poly', 'rbf', 'sigmoid']
-    n_features_options = list(range(1000, 30000, 2000))
+    kernel_options = ['linear', 'rbf']
+    n_features_options = [1000, 3000, 5000, 10000, 15000, 30000]
     norm_options = ['l1', 'l2']
 
     param_grid = [
@@ -83,7 +83,8 @@ def pipe_grid_clf(X_train, y_train):
     # For integer/None inputs for cv, if the estimator is a classifier
     # and y is either binary or multiclass, StratifiedKFold is used.
     # In all other cases, KFold is used.
-    grid = GridSearchCV(pipe, cv=5, n_jobs=2, param_grid=param_grid, verbose=1)
+    n_jobs = multiprocessing.cpu_count()
+    grid = GridSearchCV(pipe, cv=5, n_jobs=n_jobs, param_grid=param_grid, verbose=1)
     grid.fit(X_train, y_train)
 
     return grid
@@ -126,8 +127,6 @@ if __name__ == '__main__':
     reader = DataReader.load(reader_path)
     test, train, _ = reader.foreground_splits()  # use gener split as test
     (y_train, _, X_train), (y_test, _, X_test) = train, test
-    if args.max_words_train:
-        X_train = list(crop_docs(X_train, max_words=args.max_words_train))
     # remove authors with no generator (because of missing docs)
     for idx, y in enumerate(y_train):
         if y not in gen_authors:
@@ -142,8 +141,12 @@ if __name__ == '__main__':
     le.fit(y_train)
 
     # 3 Train estimator on real data and generated data
-    grid_real = pipe_grid_clf(docs_to_X(X_gen), le.transform(y_gen))
-    grid_gen = pipe_grid_clf(docs_to_X(X_train), le.transform(y_train))
+    if args.max_words_train:
+        X_train = list(crop_docs(X_train, max_words=args.max_words_train))
+    grid_real = pipe_grid_clf(docs_to_X(X_train), le.transform(y_train))
+    if args.max_words_train:
+        X_gen = list(crop_docs(X_gen, max_words=args.max_words_train))
+    grid_gen = pipe_grid_clf(docs_to_X(X_gen), le.transform(y_gen))
 
     # 4 Test estimator on real and generated docs and save
     def run_test(grid, path, X_in, y_in, X_out, y_out, le):
