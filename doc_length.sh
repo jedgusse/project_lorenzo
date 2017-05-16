@@ -11,28 +11,56 @@ set -e
 AUTHORS="Augustinus Hipponensis,Hieronymus Stridonensis,Walafridus Strabo,Petrus Damianus,Bernardus Claraevallensis,Rabanus Maurus,Beda,Ambrosius Mediolanensis,Alcuinus,Anselmus Cantuariensis,Hugo de S- Victore,Hincmarus Rhemensis,Hildebertus Cenomanensis,Richardus S- Victoris,Tertullianus,Rupertus Tuitiensis,Honorius Augustodunensis,Prosper Aquitanus,Agobardus Lugdunensis,Gregorius I,Marbodus Redonensis,Isidorus Hispalensis,Ratherius Veronensis,Venantius Fortunatus,Boetius,Innocentius III,Petrus Blesensis,Bruno Astensis,Petrus Abaelardus,Philippus de Harveng,Gerhohus Reicherspergensis,Cyprianus Carthaginensis,Hucbaldus S- Amandi,Hrothsuita Gandersheimensis,Hilarius Pictaviensis,Othlonus S- Emmerammi Ratisponensis,Bernaldus Constantiensis,Reinerus S- Laurentii Leodiensis,Alanus de Insulis,Ausonius Burdigalensis,Fulgentius Ruspensis,Guillelmus abbas,Sigebertus Gemblacensis,Petrus Cluniacensis,Ennodius Ticinensis,Berno Augiae Divitis,Paschasius Radbertus,Leo I,Joannes Scotus Erigena,Lactantius"
 #
 #   MAX_WORDS array of values specifying max nb of words per document per run
-MAX_WORDS=(500 1000 5000 10000 20000 0);
+MAX_WORDS=(500 1000 5000 10000 20000 100000);
 #
-#   LOAD_PATH path to serialized reader
-LOAD_PATH=reader
+#   READER_PATH reader path
+READER_PATH=reader
+#
+#   EXP_PATH top experiment folder
+EXP_PATH=experiments
+#   MODEL
+MODEL=rnn_lm
 ##########################################################################################
 
-echo "Creating Reader"
-python -m src.data --foreground_authors "$AUTHORS" --path $LOAD_PATH
+while [[ $# -gt 1 ]]
+do
+    key="$1"
+    case $key in
+	--max_words)
+	    MAX_WORDS="$2"
+	    shift # past argument
+	    ;;
+	--reader_path)
+	    READER_PATH="$2"
+	    shift # past argument
+	    ;;
+	--model)
+	    MODEL="$2"
+	    shift # past argument
+	    ;;	
+	*)
+            # unknown option
+	    ;;
+    esac
+    shift # past argument or value
+done
+
+EXP_PATH=$EXP_PATH/$MODEL
 
 for MAX_WORD in "${MAX_WORDS[@]}"; do
-    echo "Training generators"
+    echo "Training generators with max_words $MAX_WORD"
     python -u -m src.generator \
-	   --reader_path $LOAD_PATH.pkl \
-    	   --save_path experiments/$MAX_WORD \
+	   --reader_path $READER_PATH.pkl \
+    	   --save_path $EXP_PATH/$MAX_WORD \
 	   --generate \
-	   --gpu
+	   --model $MODEL \
+	   --gpu \
 	   --epochs 75 \
-	   --max_words $MAX_WORD >> experiments/$MAX_WORD.train.log 2>&1
+	   --max_words $MAX_WORD >> $EXP_PATH/$MAX_WORD.train.log 2>&1
     echo "Training classifier"
-    python -m src.classifier experiments/$MAX_WORD \
-	   --reader_path $LOAD_PATH.pkl \
-	   --generated_path experiments/$MAX_WORD/generated \
+    python -m src.classifier $EXP_PATH/$MAX_WORD \
+	   --reader_path $READER_PATH.pkl \
+	   --generated_path $EXP_PATH/$MAX_WORD/generated \
 	   --max_words_train $MAX_WORD
 done
 

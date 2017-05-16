@@ -16,11 +16,12 @@ READERS = {'PL': readers.patrologia_reader,
 
 
 class DataReader(object):
-    def __init__(self, name='PL', foreground_authors=None):
+    def __init__(self, name='PL', foreground_authors=None, seed=1000):
         super(DataReader, self).__init__()
         self.name = name
         self.foreground_authors = foreground_authors
         self.reader = READERS[self.name]
+        self.seed = seed
 
     def background_sentences(self):
         for document in self.reader(exclude=self.foreground_authors):
@@ -49,7 +50,8 @@ class DataReader(object):
             gener_texts, rest_texts = train_test_split(
                 authors, titles, sentences,
                 train_size=float(gener_size),
-                stratify=authors)
+                stratify=authors,
+                random_state=self.seed)
 
         if test:
             # split remaining data in equally-sized discrim and test
@@ -58,7 +60,8 @@ class DataReader(object):
                 discrim_texts, test_texts = train_test_split(
                     rest_authors, rest_titles, rest_texts,
                     train_size=float(discrim_size),
-                    stratify=rest_authors)
+                    stratify=rest_authors,
+                    random_state=self.seed)
             return (gener_authors, gener_titles, gener_texts), \
                 (discrim_authors, discrim_titles, discrim_texts), \
                 (test_authors, test_titles, test_texts)
@@ -75,6 +78,7 @@ class DataReader(object):
                 splits = self.foreground_splits(
                     gener_size=gener_size, discrim_size=discrim_size, **kwargs)
                 reader_data = {'splits': splits,
+                               'seed': self.seed,
                                'foreground_authors': self.foreground_authors,
                                'name': self.name}
                 reader_data.update(kwargs)
@@ -100,6 +104,7 @@ class DataReader(object):
                 return obj['splits']
 
         return LoadedReader(name=obj['name'],
+                            seed=obj['seed'],
                             foreground_authors=obj['foreground_authors'])
 
 
@@ -116,8 +121,10 @@ if __name__ == '__main__':
     parser.add_argument('--discrim_size', default=.4, type=float)
     parser.add_argument('--not_test', action='store_true')
     parser.add_argument('--path', default='test')
+    parser.add_argument('--seed', default=1000)
     args = parser.parse_args()
 
-    reader = DataReader(name='PL', foreground_authors=args.foreground_authors)
+    reader = DataReader(name='PL', foreground_authors=args.foreground_authors,
+                        seed=args.seed)
     reader.save(args.path, gener_size=args.gener_size,
                 discrim_size=args.discrim_size, test=not args.not_test)

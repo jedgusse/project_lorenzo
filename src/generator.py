@@ -247,7 +247,7 @@ if __name__ == '__main__':
     parser.add_argument('--gpu', action='store_true')
     parser.add_argument('--add_hook', action='store_true')
     # model
-    parser.add_argument('--use_ngram_lm', action='store_true')
+    parser.add_argument('--model', default='rnn')
     parser.add_argument('--order', type=int, default=6)
     parser.add_argument('--emb_dim', default=24, type=int)
     parser.add_argument('--hid_dim', default=200, type=int)
@@ -278,22 +278,35 @@ if __name__ == '__main__':
         for author in set(X_authors):
             examples = [sent for doc_author, doc in zip(X_authors, X_train)
                         for sent in doc if doc_author == author]
-            if args.use_ngram_lm:
+            if args.model == 'ngram_lm':
                 generator = UnsmoothedLMGenerator(args.order)
-            else:
+            elif args.model == 'rnn_lm':
                 generator = LMGenerator(
-            vocab, args.emb_dim, args.hid_dim, args.num_layers, dropout=0.3)
+                    len(fitted_d), args.emb_dim, args.hid_dim, args.num_layers,
+                    dropout=0.3)
+            else:
+                raise ValueError("Model must be ngram_lm or rnn_lm")
             n_w, n_s = sum(len(s.split()) for s in examples), len(examples)
             print('Training %s on %d words, %d sents' % (author, n_w, n_s))
-            train_generator(generator, author, examples, fitted_d, args)
+            try:
+                model_path = train_generator(
+                    generator, author, examples, fitted_d, args)
+                model_authors[author] = model_path
+            except Exception as e:
+                print("Couldn't train %s. Exception: %s" % (author, str(e)))
 
     # generation
     if args.generate:
         generated_path = '%s/generated/' % args.save_path
         if not os.path.isdir(generated_path):
             os.mkdir(generated_path)
+        """
         Parallel(n_jobs=multiprocessing.cpu_count())(
             delayed(generate_docs)(
                 load_model(fpath), author, args.nb_docs, args.max_words,
                 save=True, path=generated_path)
             for author, fpath in model_authors.items())
+        """
+        for author, fpath in model_authors.items():
+            generate_docs(load_model(fpath), author, args.nb_docs, args.max_words,
+                          save=True, path=generated_path)
