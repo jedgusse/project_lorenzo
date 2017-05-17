@@ -103,9 +103,12 @@ class DataReader(object):
                                             if k not in ('splits', 'name')]))
                 return obj['splits']
 
-        return LoadedReader(name=obj['name'],
-                            seed=obj['seed'],
-                            foreground_authors=obj['foreground_authors'])
+        args = {'name': obj['name'],
+                'foreground_authors': obj['foreground_authors']}
+        if 'seed' in obj:
+            args['seed'] = obj['seed']
+
+        return LoadedReader(**args)
 
 
 if __name__ == '__main__':
