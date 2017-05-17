@@ -257,7 +257,7 @@ if __name__ == '__main__':
     if not os.path.isdir(args.save_path):
         os.mkdir(args.save_path)
 
-    model_authors = {} 
+    model_authors = {}
     if args.generator_path is not None:
         # load generators
         for f in os.listdir(args.generator_path):
