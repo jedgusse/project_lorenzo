@@ -93,38 +93,27 @@ def pipe_grid_clf(X_train, y_train):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('path', help='Top directory containing reader, ' +
-                        'generators, and generated docs as per generator.py')
-    parser.add_argument('--reader_path', help='Custom reader path')
-    parser.add_argument('--generated_path', help='Custom generated docs path')
+    parser.add_argument('path', help='Experiment directory to save results')
+    parser.add_argument('--reader_path', help='Reader path', required=True)
+    parser.add_argument('--generated_path', required=True,
+                        help='Generated docs path')
     parser.add_argument('--max_words_train', default=False, type=int,
                         help='Number of words used per training/classify doc')
     args = parser.parse_args()
 
     # 1 Load generated documents
     X_gen, y_gen = [], []
-    if args.generated_path is not None:
-        generated_path = args.generated_path
-    else:                       # use default generated path
-        generated_path = os.path.join(args.path, 'generated')
-    for fname in os.listdir(generated_path):
+    for fname in os.listdir(args.generated_path):
         author = fname.split('.')[0].replace('_', ' ')
-        with open(os.path.join(generated_path, fname), 'r') as f:
+        with open(os.path.join(args.generated_path, fname), 'r') as f:
             doc = [line.strip() for line in f]
         X_gen.append(doc), y_gen.append(author)
-    assert len(X_gen), "Couldn't find generated docs in %s" % generated_path
+    assert len(X_gen), \
+        "Couldn't find generated docs in %s" % args.generated_path
     gen_authors = set(y_gen)
 
     # 2 Load real docs from reader
-    reader_path = None
-    if args.reader_path:        # load reader from custom path
-        reader_path = args.reader_path
-    for f in os.listdir(args.path):
-        if f.endswith('pkl'):   # reader path
-            reader_path = os.path.join(args.path, f)
-    if not reader_path:
-        raise ValueError("Couldn't find reader in dir [%s]" % args.path)
-    reader = DataReader.load(reader_path)
+    reader = DataReader.load(args.reader_path)
     test, train, _ = reader.foreground_splits()  # use gener split as test
     (y_train, _, X_train), (y_test, _, X_test) = train, test
     # remove authors with no generator (because of missing docs)
