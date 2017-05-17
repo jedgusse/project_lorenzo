@@ -67,16 +67,13 @@ def train_generator(generator, author, examples, fitted_d, args):
     """
     Utility function to train a generator
     """
-    try:
-        generator.fit(
-            examples, fitted_d, args.batch_size, args.bptt,
-            args.epochs, gpu=args.gpu, add_hook=args.add_hook)
-        fpath = '%s/%s' % (args.save_path, '_'.join(author.split()))
-        suffix = '.pkl'
-        if not args.use_ngram_lm:
-            generator.eval()        # set to validation mode
-            suffix = '.pt'
-        generator.save(fpath)
-        model_authors[author] = fpath + suffix
-    except Exception as e:
-        print("Couldn't train %s. Exception: %s" % (author, str(e)))
+    generator.fit(
+        examples, fitted_d, args.batch_size, args.bptt,
+        args.epochs, gpu=args.gpu, add_hook=args.add_hook)
+    fpath = '%s/%s' % (args.save_path, '_'.join(author.split()))
+    suffix = '.pkl'
+    if args.model == 'rnn_lm':
+        generator.eval()        # set to validation mode
+        suffix = '.pt'
+    generator.save(fpath)
+    return fpath + suffix
