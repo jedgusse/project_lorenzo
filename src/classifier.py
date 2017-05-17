@@ -78,7 +78,7 @@ def pipe_grid_clf(X_train, y_train):
             'classifier__kernel': kernel_options,
         },
     ]
-    
+
     # Stratification is default
     # For integer/None inputs for cv, if the estimator is a classifier
     # and y is either binary or multiclass, StratifiedKFold is used.

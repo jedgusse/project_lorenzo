@@ -1,7 +1,10 @@
 #!/usr/bin/env
 
 import os
+import string
 import numpy as np
+
+from src.data import DataReader
 
 
 def docs_to_X(docs):
@@ -77,3 +80,70 @@ def train_generator(generator, author, examples, fitted_d, args):
         suffix = '.pt'
     generator.save(fpath)
     return fpath + suffix
+
+
+# loaders
+def processor(line):
+    for ch in string.punctuation:
+        line = line.replace(ch, '')
+    return line.split()
+
+
+def sents_from_iter(iterator, max_words, processor=processor):
+    words, sents = 0, []
+    for sent in iterator:
+        sent = processor(sent)
+        sents.append(sent)
+        words += len(sent)
+        if words >= max_words:
+            return sents
+    return sents
+
+
+def gener_sents(author, path):
+    for f in os.listdir(path):
+        f_author = f.split('.')[0].replace('_', ' ')
+        if f_author == author:
+            with open(os.path.join(path, f), 'r') as inf:
+                for l in inf:
+                    yield l.strip()
+
+
+def real_sents(authors, docs, author):
+    for a, doc in zip(authors, docs):
+        if a == author:
+            for sent in doc:
+                yield sent
+
+
+def load_gener_authors(path, max_words=1000000):
+    authors_set = set(f.split('.')[0].replace('_', ' ')
+                      for f in os.listdir(path))
+    gener_ng = {}
+    for author in authors_set:
+        gener_ng[author] = sents_from_iter(gener_sents(author, path),
+                                           max_words=max_words)
+    return gener_ng
+
+
+def load_real_authors(path, max_words=1000000):
+    reader = DataReader.load(path)
+    gener, discrim, _ = reader.foreground_splits()
+    discrim_authors, _, discrim_docs = discrim
+    gener_authors, _, gener_docs = gener
+
+    discrim_ng = {}
+    for author in set(discrim_authors):
+        sents = sents_from_iter(
+            real_sents(discrim_authors, discrim_docs, author),
+            max_words=max_words)
+        discrim_ng[author] = sents
+
+    gener_source_ng = {}
+    for author in set(discrim_authors):
+        sents = sents_from_iter(
+            real_sents(gener_authors, gener_docs, author),
+            max_words=max_words)
+        gener_source_ng[author] = sents
+
+    return discrim_ng, gener_source_ng
