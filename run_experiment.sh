@@ -15,6 +15,25 @@ AUTHORS="Augustinus Hipponensis,Hieronymus Stridonensis,Walafridus Strabo,Petrus
 EXP_PATH=experiments/test
 ##########################################################################################
 
+while [[ $# -gt 1 ]]
+do
+    key="$1"
+    case $key in
+	--exp_path)
+	    EXP_PATH="$2"
+	    shift # past argument
+	    ;;
+	--model)
+	    MODEL="$2"
+	    shift # past argument
+	    ;;	
+	*)
+            # unknown option
+	    ;;
+    esac
+    shift # past argument or value
+done
+
 echo "Creating Reader"
 python -m src.data --foreground_authors "$AUTHORS" --path $EXP_PATH/reader
 
