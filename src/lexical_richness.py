@@ -85,6 +85,8 @@ def mc_interval(samples, interval=0.025):
     """
     samples = np.array(samples)
     split_idx = int(len(samples) * interval)
+    if split_idx == 0:
+        raise ValueError("Not enough samples to compute interval")
     sort = np.sort(samples)
     return sort[split_idx], sort.mean(), sort[-split_idx]
 
@@ -108,5 +110,4 @@ def bootstrap_trajectory(corpus, func, n_chunks, resampling=1000):
             corpus, func, n_chunks, rng=np.random.RandomState(seeds[r])
         ) for r in range(resampling))
     # compute confidence intervals
-    return [(step[0][0], mc_interval([score for _, score in step]))
-            for step in zip(*result)]
+    return [(step[0][0], [val for _, val in step]) for step in zip(*result)]
