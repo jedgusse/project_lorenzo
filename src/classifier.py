@@ -57,7 +57,6 @@ def pipe_grid_clf(X_train, y_train):
     pipe = Pipeline(
         [('vectorizer', TfidfVectorizer()),
          ('to_dense', FunctionTransformer(to_dense, accept_sparse=True)),
-         ('feature_scaling', Normalizer()),
          ('classifier', svm.SVC())])
 
     # Classifier parameters
@@ -66,11 +65,10 @@ def pipe_grid_clf(X_train, y_train):
     c_options = [1, 10, 100, 1000]
     kernel_options = ['linear', 'rbf']
     n_features_options = [1000, 3000, 5000, 10000, 15000, 30000]
-    norm_options = ['l1', 'l2']
 
     param_grid = [
         {
-            'vectorizer': [TfidfVectorizer()],
+            'vectorizer': [TfidfVectorizer(), TfidfVectorizer(analyzer= 'char', ngram_range=(2,4))],
             'vectorizer__use_idf': idfs,
             'vectorizer__max_features': n_features_options,
             'vectorizer__norm': norm_options,
