@@ -120,8 +120,8 @@ if __name__ == '__main__':
                                  'Bernardus Claraevallensis',
                                  'Walafridus Strabo'),
                         type=lambda args: args.split(','))
-    parser.add_argument('--gener_size', default=.6, type=float)
-    parser.add_argument('--discrim_size', default=.4, type=float)
+    parser.add_argument('--gener_size', default=.5, type=float)
+    parser.add_argument('--discrim_size', default=.5, type=float)
     parser.add_argument('--not_test', action='store_true')
     parser.add_argument('--path', default='test')
     parser.add_argument('--seed', default=1000)
