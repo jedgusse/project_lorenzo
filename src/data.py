@@ -122,12 +122,12 @@ if __name__ == '__main__':
                         type=lambda args: args.split(','))
     parser.add_argument('--gener_size', default=.5, type=float)
     parser.add_argument('--discrim_size', default=.5, type=float)
-    parser.add_argument('--not_test', action='store_true')
+    parser.add_argument('--test', action='store_true')
     parser.add_argument('--path', default='test')
-    parser.add_argument('--seed', default=1000)
+    parser.add_argument('--seed', default=1000, type=int)
     args = parser.parse_args()
 
     reader = DataReader(name='PL', foreground_authors=args.foreground_authors,
                         seed=args.seed)
     reader.save(args.path, gener_size=args.gener_size,
-                discrim_size=args.discrim_size, test=not args.not_test)
+                discrim_size=args.discrim_size, test=args.test)
