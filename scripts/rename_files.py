@@ -77,5 +77,5 @@ if __name__ == '__main__':
     pl_target = args.pl_target
     orig_pl = os.path.join(root_folder, 'patrologia_rnr')
     if not os.path.isdir(os.path.join(root_folder, pl_target)):
-        os.mkdir(os.path.join(root_folder, pl_target))    
+        os.mkdir(os.path.join(root_folder, pl_target))
     process_pl(root_folder, orig_pl, pl_target)
