@@ -101,48 +101,52 @@ if __name__ == '__main__':
                         help='Number of words used per training/classify doc')
     args = parser.parse_args()
 
-    # 1 Load generated documents
-    X_gen, y_gen = [], []
+    # 1 Load alpha_bar documents
+    X_alpha_bar, y_alpha_bar = [], []
     for fname in os.listdir(args.generated_path):
         author = fname.split('.')[0].replace('_', ' ')
         with open(os.path.join(args.generated_path, fname), 'r') as f:
             doc = [line.strip() for line in f]
-        X_gen.append(doc), y_gen.append(author)
-    assert len(X_gen), \
+        X_alpha_bar.append(doc), y_alpha_bar.append(author)
+    assert len(X_alpha_bar), \
         "Couldn't find generated docs in %s" % args.generated_path
-    gen_authors = set(y_gen)
+    gen_authors = set(y_alpha_bar)
 
-    # 2 Load real docs from reader
+    # 2 Load omega docs from reader
     reader = DataReader.load(args.reader_path)
-    test, train, _ = reader.foreground_splits()  # use gener split as test
-    (y_train, _, X_train), (y_test, _, X_test) = train, test
+    alpha, omega, _ = reader.foreground_splits()  # use gener split as test
+    (y_alpha, _, X_alpha), (y_omega, _, X_omega) = alpha, omega
     # remove authors with no generator (because of missing docs)
-    for idx, y in enumerate(y_train):
+    for idx, y in enumerate(y_alpha):
         if y not in gen_authors:
-            del y_train[idx]
-            del X_train[idx]
-    for idx, y in enumerate(y_test):
+            del y_alpha[idx]
+            del X_alpha[idx]
+    for idx, y in enumerate(y_omega):
         if y not in gen_authors:
-            del y_test[idx]
-            del X_test[idx]
+            del y_omega[idx]
+            del X_omega[idx]
     # translate author names to labels
     le = preprocessing.LabelEncoder()
-    le.fit(y_train)
+    le.fit(y_alpha)  # assumes that all three datasets have all authors
 
-    # 3 Train estimator on real data and generated data
+    # 3 Train estimator on alpha, omega and alpha_bar
+    print("Training omega")
     if args.max_words_train:
-        X_train = list(crop_docs(X_train, max_words=args.max_words_train))
-    grid_real = pipe_grid_clf(docs_to_X(X_train), le.transform(y_train))
+        X_omega = crop_docs(X_omega, max_words=args.max_words_train)
+    grid_omega = pipe_grid_clf(list(docs_to_X(X_omega)), le.transform(y_omega))
+    print("Training alpha-bar")
     if args.max_words_train:
-        X_gen = list(crop_docs(X_gen, max_words=args.max_words_train))
-    grid_gen = pipe_grid_clf(docs_to_X(X_gen), le.transform(y_gen))
+        X_alpha_bar = crop_docs(X_alpha_bar, max_words=args.max_words_train)
+    grid_alpha_bar = \
+        pipe_grid_clf(list(docs_to_X(X_alpha_bar)), le.transform(y_alpha_bar))
+    print("Training alpha")
+    if args.max_words_train:
+        X_alpha = crop_docs(X_alpha, max_words=args.max_words_train)
+    grid_alpha = pipe_grid_clf(list(docs_to_X(X_alpha)), le.transform(y_alpha))
 
     # 4 Test estimator on real and generated docs and save
-    def run_test(grid, path, X_in, y_in, X_out, y_out, le):
-        best_model = grid.best_estimator_
-        best_params = grid.best_params_
-        in_pred = grid.predict(docs_to_X(X_in))
-        out_pred = grid.predict(docs_to_X(X_out))
+    def run_test(grid, path, X_test, y_test, le):
+        y_pred = grid.predict(docs_to_X(X_test))
 
         if not os.path.isdir(path):
             os.mkdir(path)
@@ -160,16 +164,18 @@ if __name__ == '__main__':
             with open(path, 'w') as f:
                 json.dump(report, f)
 
-        out_report_path = os.path.join(path, 'report_out.json')
-        dump_report(le.transform(y_out), out_pred, out_report_path, le)
-        in_report_path = os.path.join(path, 'report_in.json')
-        dump_report(le.transform(y_in), in_pred, in_report_path, le)
+        out_report_path = os.path.join(path, 'report.json')
+        dump_report(le.transform(y_pred), y_test, out_report_path, le)
         with open(os.path.join(path, 'best_model.txt'), 'w') as f:
-            pprint(best_model, stream=f)
+            pprint(grid.best_estimator_, stream=f)
         with open(os.path.join(path, 'best_params.json'), 'w') as f:
-            json.dump({k: str(v) for k, v in best_params.items()}, f)
+            json.dump({k: str(v) for k, v in grid.best_params_.items()}, f)
 
-    class_path = os.path.join(args.path, 'classification')
-    run_test(grid_real, class_path, X_test, y_test, X_gen, y_gen, le)
-    gen_path = os.path.join(args.path, 'augmentation')
-    run_test(grid_gen, gen_path, X_gen, y_gen, X_test, y_test, le)
+    omega_alpha = os.path.join(args.path, 'omega_alpha')
+    run_test(grid_omega, omega_alpha, X_alpha, y_alpha, le)
+    omega_alpha_bar = os.path.join(args.path, 'omega_alpha_bar')
+    run_test(grid_omega, omega_alpha_bar, X_alpha_bar, y_alpha_bar, le)
+    alpha_omega = os.path.join(args.path, 'alpha_omega')
+    run_test(grid_alpha, alpha_omega, X_omega, y_omega, le)
+    alpha_bar_omega = os.path.join(args.path, 'alpha_bar_omega')
+    run_test(grid_alpha_bar, alpha_bar_omega, X_omega, y_omega, le)
