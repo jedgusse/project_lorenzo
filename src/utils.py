@@ -31,8 +31,7 @@ def crop_docs(docs, max_words=float('inf')):
     """
     Run `crop_doc` on all docs
     """
-    for doc in docs:
-        yield crop_doc(doc, max_words)
+    return [crop_doc(doc, max_words) for doc in docs]
 
 
 def sample(a, temperature=1.0):

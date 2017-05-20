@@ -135,16 +135,16 @@ if __name__ == '__main__':
     print("Training omega")
     if args.max_words_train:
         X_omega = crop_docs(X_omega, max_words=args.max_words_train)
-    grid_omega = pipe_grid_clf(list(docs_to_X(X_omega)), le.transform(y_omega))
+    grid_omega = pipe_grid_clf(docs_to_X(X_omega), le.transform(y_omega))
     print("Training alpha-bar")
     if args.max_words_train:
         X_alpha_bar = crop_docs(X_alpha_bar, max_words=args.max_words_train)
     grid_alpha_bar = \
-        pipe_grid_clf(list(docs_to_X(X_alpha_bar)), le.transform(y_alpha_bar))
+        pipe_grid_clf(docs_to_X(X_alpha_bar), le.transform(y_alpha_bar))
     print("Training alpha")
     if args.max_words_train:
         X_alpha = crop_docs(X_alpha, max_words=args.max_words_train)
-    grid_alpha = pipe_grid_clf(list(docs_to_X(X_alpha)), le.transform(y_alpha))
+    grid_alpha = pipe_grid_clf(docs_to_X(X_alpha), le.transform(y_alpha))
 
     # 4 Test estimator on real and generated docs and save
     def run_test(grid, path, X_test, y_test, le):
@@ -167,17 +167,19 @@ if __name__ == '__main__':
                 json.dump(report, f)
 
         out_report_path = os.path.join(path, 'report.json')
-        dump_report(le.transform(y_pred), y_test, out_report_path, le)
+        dump_report(le.transform(y_test), y_pred, out_report_path, le)
         with open(os.path.join(path, 'best_model.txt'), 'w') as f:
             pprint(grid.best_estimator_, stream=f)
         with open(os.path.join(path, 'best_params.json'), 'w') as f:
             json.dump({k: str(v) for k, v in grid.best_params_.items()}, f)
+        with open(os.path.join(path, 'cv_result.json'), 'w') as f:
+            json.dump({k: str(v) for k, v in grid.cv_results_.items()}, f)
 
-    omega_alpha = os.path.join(args.path, 'omega_alpha')
-    run_test(grid_omega, omega_alpha, X_alpha, y_alpha, le)
-    omega_alpha_bar = os.path.join(args.path, 'omega_alpha_bar')
-    run_test(grid_omega, omega_alpha_bar, X_alpha_bar, y_alpha_bar, le)
-    alpha_omega = os.path.join(args.path, 'alpha_omega')
-    run_test(grid_alpha, alpha_omega, X_omega, y_omega, le)
-    alpha_bar_omega = os.path.join(args.path, 'alpha_bar_omega')
-    run_test(grid_alpha_bar, alpha_bar_omega, X_omega, y_omega, le)
+    omega_alpha_path = os.path.join(args.path, 'omega_alpha')
+    run_test(grid_omega, omega_alpha_path, X_alpha, y_alpha, le)
+    omega_alpha_bar_path = os.path.join(args.path, 'omega_alpha_bar')
+    run_test(grid_omega, omega_alpha_bar_path, X_alpha_bar, y_alpha_bar, le)
+    alpha_omega_path = os.path.join(args.path, 'alpha_omega')
+    run_test(grid_alpha, alpha_omega_path, X_omega, y_omega, le)
+    alpha_bar_omega_path = os.path.join(args.path, 'alpha_bar_omega')
+    run_test(grid_alpha_bar, alpha_bar_omega_path, X_omega, y_omega, le)
