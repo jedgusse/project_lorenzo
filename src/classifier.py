@@ -16,6 +16,7 @@ from sklearn.metrics import precision_recall_fscore_support
 
 from src.utils import docs_to_X, crop_docs, load_best_params
 from src.data import DataReader
+from src.authors import authors
 
 
 def to_dense(X):
@@ -119,6 +120,8 @@ if __name__ == '__main__':
                         'already grid-searched params of the alpha classifier')
     parser.add_argument('--max_words_train', default=False, type=int,
                         help='Number of words used per training/classify doc')
+    parser.add_argument('--max_authors', type=int, default=50, help='Run the ' +
+                        'experiments for a selection of the max n authors')
     args = parser.parse_args()
 
     # 1 Load alpha_bar documents
@@ -130,13 +133,14 @@ if __name__ == '__main__':
         X_alpha_bar.append(doc), y_alpha_bar.append(author)
     assert len(X_alpha_bar), \
         "Couldn't find generated docs in %s" % args.generated_path
-    gen_authors = set(y_alpha_bar)
+    gen_authors = set([author for author in y_alpha_bar
+                       if author in authors[:args.max_authors]])
 
     # 2 Load omega docs from reader
     reader = DataReader.load(args.reader_path)
     alpha, omega, _ = reader.foreground_splits()  # use gener split as test
     (y_alpha, _, X_alpha), (y_omega, _, X_omega) = alpha, omega
-    # remove authors with no generator (because of missing docs)
+    # remove authors with no generator (because of missing docs or max_authors)
     for idx, y in enumerate(y_alpha):
         if y not in gen_authors:
             del y_alpha[idx]
@@ -145,6 +149,10 @@ if __name__ == '__main__':
         if y not in gen_authors:
             del y_omega[idx]
             del X_omega[idx]
+    for idx, y in enumerate(y_alpha_bar):
+        if y not in gen_authors:
+            del y_alpha_bar[idx]
+            del X_alpha_bar[idx]
     # translate author names to labels
     le = preprocessing.LabelEncoder()
     le.fit(y_alpha)  # assumes that all three datasets have all authors
