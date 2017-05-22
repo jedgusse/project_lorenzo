@@ -63,8 +63,8 @@ def pipe_grid_clf(X_train, y_train):
 
     idfs = [True, False]
     c_options = [1, 10, 100, 1000]
-    kernel_options = ['linear', 'rbf']
-    n_features_options = [1000, 3000, 5000, 10000, 15000, 30000]
+    kernel_options = ['linear']
+    n_features_options = [5000, 10000, 15000, 30000]
     norm_options = ['l1', 'l2']
 
     param_grid = [
