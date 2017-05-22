@@ -2,6 +2,7 @@
 
 import os
 import string
+import json
 import numpy as np
 
 from src.data import DataReader
@@ -146,3 +147,15 @@ def load_real_authors(path, max_words=1000000):
         gener_source_ng[author] = sents
 
     return discrim_ng, gener_source_ng
+
+
+def load_best_params(path):
+    with open(os.path.join(path, 'best_params.json'), 'r') as f:
+        params = json.load(f)
+    if 'vectorizer__use_idf' in params:
+        params['vectorizer__use_idf'] = \
+            True if params['vectorizer__use_idf'] == 'True' else False
+        params['vectorizer__max_features'] = \
+            int(params['vectorizer__max_features'])
+        params['classifier__C'] = int(params['classifier__C'])
+    return params
