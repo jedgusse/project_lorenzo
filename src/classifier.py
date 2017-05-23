@@ -14,7 +14,7 @@ from sklearn.preprocessing import (
     Normalizer, StandardScaler, FunctionTransformer)
 from sklearn.metrics import precision_recall_fscore_support
 
-from src.utils import docs_to_X, crop_docs, load_best_params
+from src.utils import docs_to_X, crop_docs, load_best_params, filter_authors
 from src.data import DataReader
 from src.authors import authors
 
@@ -107,6 +107,37 @@ def clf_from_params(params):
              kernel=params['classifier__kernel']))])
 
 
+def run_test(grid, path, X_test, y_test, le):
+    y_pred = grid.predict(docs_to_X(X_test))
+
+    if not os.path.isdir(path):
+        os.mkdir(path)
+
+    def dump_report(y_true, y_pred, path, le):
+        p, r, f1, s = precision_recall_fscore_support(y_true, y_pred)
+        report = []
+        for i in range(len(set(y_true))):
+            report.append(
+                {'author': le.inverse_transform(i),
+                 'result': {'precision': p[i],
+                            'recall': r[i],
+                            'f1': f1[i],
+                            'support': int(s[i])}})
+        with open(path, 'w') as f:
+            json.dump(report, f)
+
+    out_report_path = os.path.join(path, 'report.json')
+    dump_report(le.transform(y_test), y_pred, out_report_path, le)
+    if isinstance(grid, Pipeline):
+        return              # only save best params if grid
+    with open(os.path.join(path, 'best_model.txt'), 'w') as f:
+        pprint(grid.best_estimator_, stream=f)
+    with open(os.path.join(path, 'best_params.json'), 'w') as f:
+        json.dump({k: str(v) for k, v in grid.best_params_.items()}, f)
+    with open(os.path.join(path, 'cv_result.json'), 'w') as f:
+        json.dump({k: str(v) for k, v in grid.cv_results_.items()}, f)
+
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
@@ -124,77 +155,37 @@ if __name__ == '__main__':
                         'experiments for a selection of the max n authors')
     args = parser.parse_args()
 
-    # 1 Load alpha_bar documents
+    # 1 Load documents
     X_alpha_bar, y_alpha_bar = [], []
     for fname in os.listdir(args.generated_path):
         author = fname.split('.')[0].replace('_', ' ')
         with open(os.path.join(args.generated_path, fname), 'r') as f:
             doc = [line.strip() for line in f]
         X_alpha_bar.append(doc), y_alpha_bar.append(author)
-    assert len(X_alpha_bar), \
+    assert len(X_alpha_bar) > 0, \
         "Couldn't find generated docs in %s" % args.generated_path
-    gen_authors = set([author for author in y_alpha_bar
-                       if author in authors[:args.max_authors]])
-
     # 2 Load omega docs from reader
     reader = DataReader.load(args.reader_path)
     alpha, omega, _ = reader.foreground_splits()  # use gener split as test
     (y_alpha, _, X_alpha), (y_omega, _, X_omega) = alpha, omega
-    # remove authors with no generator (because of missing docs or max_authors)
-    for idx, y in enumerate(y_alpha):
-        if y not in gen_authors:
-            del y_alpha[idx]
-            del X_alpha[idx]
-    for idx, y in enumerate(y_omega):
-        if y not in gen_authors:
-            del y_omega[idx]
-            del X_omega[idx]
-    for idx, y in enumerate(y_alpha_bar):
-        if y not in gen_authors:
-            del y_alpha_bar[idx]
-            del X_alpha_bar[idx]
-    # translate author names to labels
-    le = preprocessing.LabelEncoder()
-    le.fit(y_alpha)  # assumes that all three datasets have all authors
-
-    # 3 Eventually crop docs
+    # eventually filter authors
+    keep_authors = set([author for author in y_alpha_bar
+                        if author in authors[:args.max_authors]])
+    y_alpha, X_alpha = filter_authors(y_alpha, X_alpha, keep_authors)
+    y_omega, X_omega = filter_authors(y_omega, X_omega, keep_authors)
+    y_alpha_bar, X_alpha_bar = filter_authors(
+        y_alpha_bar, X_alpha_bar, keep_authors)
+    # eventually crop docs
     if args.max_words_train:
         X_omega = crop_docs(X_omega, max_words=args.max_words_train)
         X_alpha = crop_docs(X_alpha, max_words=args.max_words_train)
         X_alpha_bar = crop_docs(X_alpha_bar, max_words=args.max_words_train)
+    # translate author names to labels
+    le = preprocessing.LabelEncoder()
+    le.fit(y_alpha)  # assumes that all three datasets have all authors
 
-    def run_test(grid, path, X_test, y_test, le):
-        y_pred = grid.predict(docs_to_X(X_test))
-
-        if not os.path.isdir(path):
-            os.mkdir(path)
-
-        def dump_report(y_true, y_pred, path, le):
-            p, r, f1, s = precision_recall_fscore_support(y_true, y_pred)
-            report = []
-            for i in range(len(set(y_true))):
-                report.append(
-                    {'author': le.inverse_transform(i),
-                     'result': {'precision': p[i],
-                                'recall': r[i],
-                                'f1': f1[i],
-                                'support': int(s[i])}})
-            with open(path, 'w') as f:
-                json.dump(report, f)
-
-        out_report_path = os.path.join(path, 'report.json')
-        dump_report(le.transform(y_test), y_pred, out_report_path, le)
-        if isinstance(grid, Pipeline):
-            return              # only save best params if grid
-        with open(os.path.join(path, 'best_model.txt'), 'w') as f:
-            pprint(grid.best_estimator_, stream=f)
-        with open(os.path.join(path, 'best_params.json'), 'w') as f:
-            json.dump({k: str(v) for k, v in grid.best_params_.items()}, f)
-        with open(os.path.join(path, 'cv_result.json'), 'w') as f:
-            json.dump({k: str(v) for k, v in grid.cv_results_.items()}, f)
-
-    # 4 Train estimator on alpha, omega and alpha_bar
-    # 4.1 Train omega
+    # 3 Train estimator on alpha, omega and alpha_bar
+    # 3.1 Train omega
     if args.omega_params is not None:
         print("Loading omega best params")
         grid_omega = clf_from_params(load_best_params(args.omega_params))
@@ -210,7 +201,7 @@ if __name__ == '__main__':
     omega_alpha_bar_path = os.path.join(args.path, 'omega_alpha_bar')
     run_test(grid_omega, omega_alpha_bar_path, X_alpha_bar, y_alpha_bar, le)
 
-    # 4.2 (Eventually) train alpha
+    # 3.2 (Eventually) train alpha
     if args.alpha_params is None:
         print("Training alpha")
         grid_alpha = pipe_grid_clf(docs_to_X(X_alpha), le.transform(y_alpha))

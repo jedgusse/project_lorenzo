@@ -35,6 +35,11 @@ def crop_docs(docs, max_words=float('inf')):
     return [crop_doc(doc, max_words) for doc in docs]
 
 
+def filter_authors(y_docs, X_docs, authors):
+    y_docs, X_docs = zip(*[(y, x) for y, x in zip(y_docs, X_docs) if y in authors])
+    return list(y_docs), list(X_docs)
+
+
 def sample(a, temperature=1.0):
     """
     numpy implementation of multinomial sampling

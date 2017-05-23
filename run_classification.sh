@@ -3,6 +3,7 @@
 EXP_PATH=experiments
 READER_PATH=reader.pkl
 FOLDER=*0
+MAX_AUTHORS=50
 
 while [[ $# -gt 1 ]]
 do
@@ -18,6 +19,10 @@ do
 	    ;;
 	--folder)
 	    FOLDER="$2"
+	    shift
+	    ;;
+	--max_authors)
+	    MAX_AUTHORS="$2"
 	    shift
 	    ;;
 	--omega_params)
@@ -39,12 +44,12 @@ for d in $EXP_PATH/$FOLDER; do
     echo "Classifying $d"
     MAX_WORDS_TRAIN=$(basename $d)
     if [ ! -z $OMEGA_PARAMS ] && [ ! -z $ALPHA_PARAMS ]; then
-	python -m src.classifier $d --reader_path $READER_PATH --generated_path $d/generated/ --max_words_train $MAX_WORDS_TRAIN --omega_params $OMEGA_PARAMS/$MAX_WORDS_TRAIN/omega_alpha --alpha_params $ALPHA_PARAMS/$MAX_WORDS_TRAIN/alpha_omega
+	python -m src.classifier $d --max_authors $MAX_AUTHORS --reader_path $READER_PATH --generated_path $d/generated/ --max_words_train $MAX_WORDS_TRAIN --omega_params $OMEGA_PARAMS/$MAX_WORDS_TRAIN/omega_alpha --alpha_params $ALPHA_PARAMS/$MAX_WORDS_TRAIN/alpha_omega
     elif [ ! -z $OMEGA_PARAMS ]; then
-	python -m src.classifier $d --reader_path $READER_PATH --generated_path $d/generated/ --max_words_train $MAX_WORDS_TRAIN --omega_params $OMEGA_PARAMS/$MAX_WORDS_TRAIN/omega_alpha
+	python -m src.classifier $d --max_authors $MAX_AUTHORS --reader_path $READER_PATH --generated_path $d/generated/ --max_words_train $MAX_WORDS_TRAIN --omega_params $OMEGA_PARAMS/$MAX_WORDS_TRAIN/omega_alpha
     elif [ ! -z $ALPHA_PARAMS ]; then
-	python -m src.classifier $d --reader_path $READER_PATH --generated_path $d/generated/ --max_words_train $MAX_WORDS_TRAIN --alpha_params $ALPHA_PARAMS/$MAX_WORDS_TRAIN/alpha_omega
+	python -m src.classifier $d --max_authors $MAX_AUTHORS --reader_path $READER_PATH --generated_path $d/generated/ --max_words_train $MAX_WORDS_TRAIN --alpha_params $ALPHA_PARAMS/$MAX_WORDS_TRAIN/alpha_omega
     else
-	python -m src.classifier $d --reader_path $READER_PATH --generated_path $d/generated/ --max_words_train $MAX_WORDS_TRAIN
+	python -m src.classifier $d --max_authors $MAX_AUTHORS --reader_path $READER_PATH --generated_path $d/generated/ --max_words_train $MAX_WORDS_TRAIN
     fi
 done

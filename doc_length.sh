@@ -28,6 +28,7 @@ do
     case $key in
 	--max_words)
 	    MAX_WORDS="$2"
+	    MAX_WORDS=( $(echo $MAX_WORDS | sed -e 's/,/\n/g') )
 	    shift # past argument
 	    ;;
 	--reader_path)
@@ -46,21 +47,20 @@ do
 done
 
 EXP_PATH=$EXP_PATH/$MODEL
-
 for MAX_WORD in "${MAX_WORDS[@]}"; do
     echo "Training generators with max_words $MAX_WORD"
     python -u -m src.generator \
-	   --reader_path $READER_PATH.pkl \
+	   --reader_path $READER_PATH \
     	   --save_path $EXP_PATH/$MAX_WORD \
 	   --generate \
 	   --model $MODEL \
 	   --gpu \
-	   --batch_size 200 \
-	   --epochs 50 \
+	   --batch_size 50 \
+	   --epochs 75 \
 	   --max_words_train $MAX_WORD >> $EXP_PATH/$MAX_WORD.train.log 2>&1
     # echo "Training classifier"
     # python -m src.classifier $EXP_PATH/$MAX_WORD \
-    # 	   --reader_path $READER_PATH.pkl \
+    # 	   --reader_path $READER_PATH \
     # 	   --generated_path $EXP_PATH/$MAX_WORD/generated \
     # 	   --max_words_train $MAX_WORD
 done

@@ -125,7 +125,7 @@ class LMGenerator(LM, BasisGenerator):
             # dataset parameters
             examples, d, batch_size, bptt, epochs, split=0.1,
             # optimizer parameters
-            optim_method='SGD', lr=1., max_norm=5.,
+            optim_method='Adam', lr=0.001, max_norm=5.,
             start_decay_at=15, decay_every=5, lr_decay=0.8,
             # other parameters
             gpu=False, verbose=True, add_hook=False, **kwargs):
@@ -236,7 +236,7 @@ if __name__ == '__main__':
     parser.add_argument('--generate', action='store_true',
                         help='Whether to generate and store docs. ' +
                         'Text will be stored to save_path/generated')
-    parser.add_argument('--nb_docs', type=int, default=10,
+    parser.add_argument('--nb_docs', type=int, default=50,
                         help='Number of generated docs per author')
     parser.add_argument('--generator_path', help='Path with ' +
                         'generators for loading (no training involved)')
@@ -301,7 +301,7 @@ if __name__ == '__main__':
         if not os.path.isdir(generated_path):
             os.mkdir(generated_path)
         """
-        Parallel(n_jobs=multiprocessing.cpu_count())(
+        Parallel(n_jobs=multiprocessing.cpu_count()//2)(
             delayed(generate_docs)(
                 load_model(fpath), author, args.nb_docs, args.max_words,
                 save=True, path=generated_path)
