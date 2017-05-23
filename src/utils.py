@@ -36,7 +36,8 @@ def crop_docs(docs, max_words=float('inf')):
 
 
 def filter_authors(y_docs, X_docs, authors):
-    y_docs, X_docs = zip(*[(y, x) for y, x in zip(y_docs, X_docs) if y in authors])
+    y_docs, X_docs = zip(*[(y, x) for y, x in zip(y_docs, X_docs)
+                           if y in authors])
     return list(y_docs), list(X_docs)
 
 
@@ -164,3 +165,13 @@ def load_best_params(path):
             int(params['vectorizer__max_features'])
         params['classifier__C'] = int(params['classifier__C'])
     return params
+
+
+def load_docs_from_dir(path):
+    X, y = [], []
+    for fname in os.listdir(path):
+        author = fname.split('.')[0].replace('_', ' ')
+        with open(os.path.join(path, fname), 'r') as f:
+            doc = [line.strip() for line in f]
+        X.append(doc), y.append(author)
+    return X, y

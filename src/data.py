@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+import random; random.seed(1000)
+from collections import defaultdict
 import os
 import logging
 try:
@@ -111,6 +113,36 @@ class DataReader(object):
         return LoadedReader(**args)
 
 
+def sample_split(docs, authors, nb_docs, nb_words):
+    sents, sample = defaultdict(list), defaultdict(list)
+    for doc, author in zip(docs, authors):
+        for s in doc:
+            sents[author].append(s)
+    wcs = defaultdict(int)
+    for author, sents in sents.items():
+        random.shuffle(sents)
+        doc = []
+        for s in sents:
+            if len(sample[author]) == nb_docs:
+                break
+            if wcs[author] >= nb_words:
+                sample[author].append(doc)
+                doc = []
+                wcs[author] = 0
+            doc.append(s)
+            wcs[author] += len(s.strip().split())
+    return sample
+
+
+def dump_sample(sampled, path):
+    for author, docs in sampled.items():
+        for doc_id, doc in enumerate(docs):
+            doc_id = str(doc_id + 1).rjust(len(str(len(docs))), '0')
+            fname = '%s.%s.txt' % ('_'.join(author.split()), doc_id)
+            with open(os.path.join(path, fname), 'w+') as f:
+                f.write('\n'.join(doc))
+
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
@@ -125,9 +157,23 @@ if __name__ == '__main__':
     parser.add_argument('--test', action='store_true')
     parser.add_argument('--path', default='test')
     parser.add_argument('--seed', default=1000, type=int)
+    parser.add_argument('--omega_path', help='Output path for sampled docs ' +
+                        'from discriminator training data')
+    parser.add_argument('--alpha_path', help='Output path for sampled docs ' +
+                        'from generator training data')
+    parser.add_argument('--nb_docs', type=int, default=20)
+    parser.add_argument('--nb_words', type=int, default=5000)
     args = parser.parse_args()
 
     reader = DataReader(name='PL', foreground_authors=args.foreground_authors,
                         seed=args.seed)
     reader.save(args.path, gener_size=args.gener_size,
                 discrim_size=args.discrim_size, test=args.test)
+    alpha, omega, _ = reader.foreground_splits()  # use gener split as test
+    (y_alpha, _, X_alpha), (y_omega, _, X_omega) = alpha, omega
+    if args.omega_path:
+        omega = sample_split(X_omega, y_omega, args.nb_docs, args.nb_words)
+        dump_sample(omega, args.omega_path)
+    if args.alpha_params:
+        alpha = sample_split(X_alpha, y_alpha, args.nb_docs, args.nb_words)
+        dump_sample(alpha, args.alpha_path)

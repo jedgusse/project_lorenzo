@@ -7,14 +7,14 @@ import multiprocessing
 import numpy as np
 from scipy import stats
 from sklearn import svm, preprocessing
-from sklearn.model_selection import GridSearchCV, LeaveOneOut
+from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
-from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
-from sklearn.preprocessing import (
-    Normalizer, StandardScaler, FunctionTransformer)
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import FunctionTransformer
 from sklearn.metrics import precision_recall_fscore_support
 
-from src.utils import docs_to_X, crop_docs, load_best_params, filter_authors
+from src.utils import (
+    docs_to_X, load_best_params, filter_authors, load_docs_from_dir)
 from src.data import DataReader
 from src.authors import authors
 
@@ -141,33 +141,25 @@ def run_test(grid, path, X_test, y_test, le):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('path', help='Experiment directory to save results')
+    parser.add_argument('output_path', help='Directory to save results')
     parser.add_argument('--reader_path', help='Reader path', required=True)
-    parser.add_argument('--generated_path', required=True,
-                        help='Generated docs path')
+    parser.add_argument('--omega_path', help='Omega docs path', required=True)
+    parser.add_argument('--alpha_path', help='Omega docs path', required=True)
+    parser.add_argument('--alpha_bar_path', help='A-bar path', required=True)
     parser.add_argument('--omega_params', help='path to file containing the ' +
                         'already grid-searched params of the omega classifer')
     parser.add_argument('--alpha_params', help='path to file containing the ' +
                         'already grid-searched params of the alpha classifier')
-    parser.add_argument('--max_words_train', default=False, type=int,
-                        help='Number of words used per training/classify doc')
-    parser.add_argument('--max_authors', type=int, default=50, help='Run the ' +
+    parser.add_argument('--max_authors', type=int, default=50, help='Run ' +
                         'experiments for a selection of the max n authors')
     args = parser.parse_args()
 
     # 1 Load documents
-    X_alpha_bar, y_alpha_bar = [], []
-    for fname in os.listdir(args.generated_path):
-        author = fname.split('.')[0].replace('_', ' ')
-        with open(os.path.join(args.generated_path, fname), 'r') as f:
-            doc = [line.strip() for line in f]
-        X_alpha_bar.append(doc), y_alpha_bar.append(author)
-    assert len(X_alpha_bar) > 0, \
-        "Couldn't find generated docs in %s" % args.generated_path
+    X_alpha, y_alpha = load_docs_from_dir(args.alpha_path)
+    X_omega, y_omega = load_docs_from_dir(args.omega_path)
+    X_alpha_bar, y_alpha_bar = load_docs_from_dir(args.alpha_bar_path)
     # 2 Load omega docs from reader
-    reader = DataReader.load(args.reader_path)
-    alpha, omega, _ = reader.foreground_splits()  # use gener split as test
-    (y_alpha, _, X_alpha), (y_omega, _, X_omega) = alpha, omega
+
     # eventually filter authors
     keep_authors = set([author for author in y_alpha_bar
                         if author in authors[:args.max_authors]])
@@ -175,11 +167,6 @@ if __name__ == '__main__':
     y_omega, X_omega = filter_authors(y_omega, X_omega, keep_authors)
     y_alpha_bar, X_alpha_bar = filter_authors(
         y_alpha_bar, X_alpha_bar, keep_authors)
-    # eventually crop docs
-    if args.max_words_train:
-        X_omega = crop_docs(X_omega, max_words=args.max_words_train)
-        X_alpha = crop_docs(X_alpha, max_words=args.max_words_train)
-        X_alpha_bar = crop_docs(X_alpha_bar, max_words=args.max_words_train)
     # translate author names to labels
     le = preprocessing.LabelEncoder()
     le.fit(y_alpha)  # assumes that all three datasets have all authors
@@ -189,7 +176,6 @@ if __name__ == '__main__':
     if args.omega_params is not None:
         print("Loading omega best params")
         grid_omega = clf_from_params(load_best_params(args.omega_params))
-        print(grid_omega)
         grid_omega.fit(docs_to_X(X_omega), le.transform(y_omega))
     else:
         print("Training omega")
