@@ -73,7 +73,7 @@ class DataReader(object):
             return (gener_authors, gener_titles, gener_texts), \
                 (rest_authors, rest_titles, rest_texts), None
 
-    def save(self, path, gener_size=.4, discrim_size=.6, **kwargs):
+    def save(self, path, gener_size=.5, discrim_size=.5, **kwargs):
         fname = path if path.endswith('.pkl') else path + '.pkl'
         try:
             with open(fname, 'wb') as f:
@@ -174,6 +174,6 @@ if __name__ == '__main__':
     if args.omega_path:
         omega = sample_split(X_omega, y_omega, args.nb_docs, args.nb_words)
         dump_sample(omega, args.omega_path)
-    if args.alpha_params:
+    if args.alpha_path:
         alpha = sample_split(X_alpha, y_alpha, args.nb_docs, args.nb_words)
         dump_sample(alpha, args.alpha_path)

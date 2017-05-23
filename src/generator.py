@@ -229,9 +229,9 @@ if __name__ == '__main__':
     parser.add_argument('--reader_path',
                         help='Required if generator_path is not given.')
     parser.add_argument('--save_path', required=True)
-    parser.add_argument('--max_words', default=2000, type=int,
+    parser.add_argument('--nb_words', default=2000, type=int,
                         help='Number of words per generated doc')
-    parser.add_argument('--max_words_train', default=False, type=int,
+    parser.add_argument('--max_words', default=0, type=int,
                         help='Crop train docs to this number of words')
     parser.add_argument('--generate', action='store_true',
                         help='Whether to generate and store docs. ' +
@@ -240,6 +240,8 @@ if __name__ == '__main__':
                         help='Number of generated docs per author')
     parser.add_argument('--generator_path', help='Path with ' +
                         'generators for loading (no training involved)')
+    parser.add_argument('--n_jobs', type=int, default=1)
+    parser.add_argument('--author_selection')
     # train
     parser.add_argument('--batch_size', default=50, type=int)
     parser.add_argument('--bptt', default=50, type=int)
@@ -247,7 +249,7 @@ if __name__ == '__main__':
     parser.add_argument('--gpu', action='store_true')
     parser.add_argument('--add_hook', action='store_true')
     # model
-    parser.add_argument('--model', default='rnn')
+    parser.add_argument('--model', default='rnn_lm')
     parser.add_argument('--order', type=int, default=6)
     parser.add_argument('--emb_dim', default=24, type=int)
     parser.add_argument('--hid_dim', default=200, type=int)
@@ -257,6 +259,12 @@ if __name__ == '__main__':
     if not os.path.isdir(args.save_path):
         os.mkdir(args.save_path)
 
+    keep_author = lambda author: True
+    if args.author_selection:
+        keep = set([author.replace('_', ' ')
+                    for author in args.author_selection.split(',')])
+        keep_author = lambda author: author in keep
+
     model_authors = {}
     if args.generator_path is not None:
         # load generators
@@ -264,18 +272,21 @@ if __name__ == '__main__':
             if not f.endswith('pt'):
                 continue
             author = os.path.basename(f).split('.')[0].replace('_', ' ')
-            model_authors[author] = os.path.join(args.generator_path, f)
+            if keep_author(author):
+                model_authors[author] = os.path.join(args.generator_path, f)
     else:
         # load data
         reader = DataReader.load(args.reader_path)
         train, _, _ = reader.foreground_splits()  # take gener split
         X_authors, _, X_train = train             # ignore titles
-        if args.max_words_train:
-            X_train = list(crop_docs(X_train, max_words=args.max_words_train))
+        if args.max_words > 0:
+            X_train = list(crop_docs(X_train, max_words=args.max_words))
         fitted_d = BasisGenerator.fit_vocab(
             [sent for doc in X_train for sent in doc])
         # train generators
         for author in set(X_authors):
+            if not keep_author(author):
+                continue
             examples = [sent for doc_author, doc in zip(X_authors, X_train)
                         for sent in doc if doc_author == author]
             if args.model == 'ngram_lm':
@@ -300,13 +311,8 @@ if __name__ == '__main__':
         generated_path = '%s/generated/' % args.save_path
         if not os.path.isdir(generated_path):
             os.mkdir(generated_path)
-        """
-        Parallel(n_jobs=multiprocessing.cpu_count()//2)(
+        Parallel(n_jobs=args.n_jobs)(
             delayed(generate_docs)(
-                load_model(fpath), author, args.nb_docs, args.max_words,
+                load_model(fpath), author, args.nb_docs, args.nb_words,
                 save=True, path=generated_path)
             for author, fpath in model_authors.items())
-        """
-        for author, fpath in model_authors.items():
-            generate_docs(load_model(fpath), author, args.nb_docs, args.max_words,
-                          save=True, path=generated_path)

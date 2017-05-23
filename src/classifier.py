@@ -142,9 +142,9 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('output_path', help='Directory to save results')
-    parser.add_argument('--reader_path', help='Reader path', required=True)
-    parser.add_argument('--omega_path', help='Omega docs path', required=True)
-    parser.add_argument('--alpha_path', help='Omega docs path', required=True)
+    parser.add_argument('--reader_path', help='Reader path')
+    parser.add_argument('--omega_path', help='Omega docs path')
+    parser.add_argument('--alpha_path', help='Omega docs path')
     parser.add_argument('--alpha_bar_path', help='A-bar path', required=True)
     parser.add_argument('--omega_params', help='path to file containing the ' +
                         'already grid-searched params of the omega classifer')
@@ -155,12 +155,18 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # 1 Load documents
-    X_alpha, y_alpha = load_docs_from_dir(args.alpha_path)
-    X_omega, y_omega = load_docs_from_dir(args.omega_path)
+    if args.reader_path != '':
+        reader = DataReader.load(args.reader_path)
+        alpha, omega, _ = reader.foreground_splits()  # use gener split as test
+        (y_alpha, _, X_alpha), (y_omega, _, X_omega) = alpha, omega
+    else:
+        assert args.alpha_path, "Alpha path must be provided if reader is not"
+        assert args.omega_path, "Omega path must be provided if reader is not"
+        X_alpha, y_alpha = load_docs_from_dir(args.alpha_path)
+        X_omega, y_omega = load_docs_from_dir(args.omega_path)
     X_alpha_bar, y_alpha_bar = load_docs_from_dir(args.alpha_bar_path)
-    # 2 Load omega docs from reader
 
-    # eventually filter authors
+    # 2 Eventually filter authors
     keep_authors = set([author for author in y_alpha_bar
                         if author in authors[:args.max_authors]])
     y_alpha, X_alpha = filter_authors(y_alpha, X_alpha, keep_authors)
