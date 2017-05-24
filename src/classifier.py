@@ -70,12 +70,12 @@ def pipe_grid_clf(X_train, y_train):
 
     param_grid = [
         {
-            'vectorizer': [TfidfVectorizer(),
+            'vectorizer': [#TfidfVectorizer(),
                            TfidfVectorizer(analyzer='char',
                                            ngram_range=(2, 4))],
-            'vectorizer__use_idf': idfs,
+            #'vectorizer__use_idf': idfs,
             'vectorizer__max_features': n_features_options,
-            'vectorizer__norm': norm_options,
+            #'vectorizer__norm': norm_options,
             'classifier__C': c_options,
             'classifier__kernel': kernel_options,
         },
@@ -155,7 +155,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # 1 Load documents
-    if args.reader_path != '':
+    if args.reader_path:
         reader = DataReader.load(args.reader_path)
         alpha, omega, _ = reader.foreground_splits()  # use gener split as test
         (y_alpha, _, X_alpha), (y_omega, _, X_omega) = alpha, omega
@@ -176,6 +176,8 @@ if __name__ == '__main__':
     # translate author names to labels
     le = preprocessing.LabelEncoder()
     le.fit(y_alpha)  # assumes that all three datasets have all authors
+    print("Fitted %d classes" % len(le.classes_))
+    pprint({a: idx for a, idx in zip(le.classes_, le.transform(le.classes_))})
 
     # 3 Train estimator on alpha, omega and alpha_bar
     # 3.1 Train omega
@@ -187,10 +189,10 @@ if __name__ == '__main__':
         print("Training omega")
         grid_omega = pipe_grid_clf(docs_to_X(X_omega), le.transform(y_omega))
         # classify alpha only if not loaded
-        omega_alpha_path = os.path.join(args.path, 'omega_alpha')
+        omega_alpha_path = os.path.join(args.output_path, 'omega_alpha')
         run_test(grid_omega, omega_alpha_path, X_alpha, y_alpha, le)
     # classify alpha_bar
-    omega_alpha_bar_path = os.path.join(args.path, 'omega_alpha_bar')
+    omega_alpha_bar_path = os.path.join(args.output_path, 'omega_alpha_bar')
     run_test(grid_omega, omega_alpha_bar_path, X_alpha_bar, y_alpha_bar, le)
 
     # 3.2 (Eventually) train alpha
@@ -198,7 +200,7 @@ if __name__ == '__main__':
         print("Training alpha")
         grid_alpha = pipe_grid_clf(docs_to_X(X_alpha), le.transform(y_alpha))
         # classify omega
-        alpha_omega_path = os.path.join(args.path, 'alpha_omega')
+        alpha_omega_path = os.path.join(args.output_path, 'alpha_omega')
         run_test(grid_alpha, alpha_omega_path, X_omega, y_omega, le)
 
     # 3.3 Train alpha_bar
@@ -206,5 +208,5 @@ if __name__ == '__main__':
     grid_alpha_bar = \
         pipe_grid_clf(docs_to_X(X_alpha_bar), le.transform(y_alpha_bar))
     # classify omega
-    alpha_bar_omega_path = os.path.join(args.path, 'alpha_bar_omega')
+    alpha_bar_omega_path = os.path.join(args.output_path, 'alpha_bar_omega')
     run_test(grid_alpha_bar, alpha_bar_omega_path, X_omega, y_omega, le)
