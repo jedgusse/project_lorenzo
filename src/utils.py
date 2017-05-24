@@ -51,7 +51,7 @@ def sample(a, temperature=1.0):
 
 
 def generate_docs(generator, author, nb_docs, nb_words,
-                  save=False, path=None):
+                  save=False, path=None, **kwargs):
     """
     Utility function to generate docs and save them
     """
@@ -62,7 +62,7 @@ def generate_docs(generator, author, nb_docs, nb_words,
     max_sent_len = max(len(s) for s in generator.examples)
     for doc_id in range(nb_docs):
         doc, score = generator.generate_doc(
-            max_words=nb_words, max_sent_len=max_sent_len)
+            max_words=nb_words, max_sent_len=max_sent_len, **kwargs)
         docs.append(doc), scores.append(score)
         if save:
             doc_id = str(doc_id + 1).rjust(len(str(nb_docs)), '0')
@@ -78,7 +78,8 @@ def train_generator(generator, author, examples, fitted_d, args):
     """
     generator.fit(
         examples, fitted_d, args.batch_size, args.bptt,
-        args.epochs, gpu=args.gpu, add_hook=args.add_hook)
+        args.epochs, gpu=args.gpu, add_hook=args.add_hook,
+        lr=args.lr, optim_method=args.optim_method)
     fpath = '%s/%s' % (args.save_path, '_'.join(author.split()))
     suffix = '.pkl'
     if args.model == 'rnn_lm':

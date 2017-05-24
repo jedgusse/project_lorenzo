@@ -78,7 +78,6 @@ class BasisGenerator(object):
             sent = ''.join(self.d.vocab[c] for c in hyp)
             sent = sent.replace('<bos>', '').replace('<eos>', '')
             return sent, score
-
         sent, score = generate_sent(max_tries=max_tries, **kwargs)
         seed_text, doc, words, scores = None, [sent], 0, [score]
         while words < max_words:
@@ -246,6 +245,8 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', default=50, type=int)
     parser.add_argument('--bptt', default=50, type=int)
     parser.add_argument('--epochs', default=10, type=int)
+    parser.add_argument('--lr', default=0.001, type=float)
+    parser.add_argument('--optim_method', default='Adam')
     parser.add_argument('--gpu', action='store_true')
     parser.add_argument('--add_hook', action='store_true')
     # model
@@ -269,7 +270,7 @@ if __name__ == '__main__':
     if args.generator_path is not None:
         # load generators
         for f in os.listdir(args.generator_path):
-            if not f.endswith('pt'):
+            if not f.endswith('pt') and not f.endswith('pkl'):
                 continue
             author = os.path.basename(f).split('.')[0].replace('_', ' ')
             if keep_author(author):
@@ -311,8 +312,9 @@ if __name__ == '__main__':
         generated_path = '%s/generated/' % args.save_path
         if not os.path.isdir(generated_path):
             os.mkdir(generated_path)
+        reset_every = 1 if args.model == 'ngram_lm' else 10
         Parallel(n_jobs=args.n_jobs)(
             delayed(generate_docs)(
                 load_model(fpath), author, args.nb_docs, args.nb_words,
-                save=True, path=generated_path)
+                save=True, path=generated_path, reset_every=reset_every)
             for author, fpath in model_authors.items())
