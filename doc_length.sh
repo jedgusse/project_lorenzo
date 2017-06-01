@@ -50,7 +50,7 @@ EXP_PATH=$EXP_PATH/$MODEL
 for MAX_WORD in "${MAX_WORDS[@]}"; do
     echo "Training generators with max_words $MAX_WORD"
     python -u -m src.generator \
-	   --reader_path $READER_PATH \
+	   --data_path $READER_PATH \
     	   --save_path $EXP_PATH/$MAX_WORD \
 	   --generate \
 	   --model $MODEL \

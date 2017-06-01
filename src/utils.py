@@ -80,7 +80,7 @@ def train_generator(generator, author, examples, fitted_d, args):
         examples, fitted_d, args.batch_size, args.bptt,
         args.epochs, gpu=args.gpu, add_hook=args.add_hook,
         lr=args.lr, optim_method=args.optim_method)
-    fpath = '%s/%s' % (args.save_path, '_'.join(author.split()))
+    fpath = '%s/generators/%s' % (args.save_path, '_'.join(author.split()))
     suffix = '.pkl'
     if args.model == 'rnn_lm':
         generator.eval()        # set to validation mode

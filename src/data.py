@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+#!/usr/bin/env
 
 import random; random.seed(1000)
 from collections import defaultdict

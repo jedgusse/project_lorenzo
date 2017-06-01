@@ -39,7 +39,7 @@ python -m src.data --foreground_authors "$AUTHORS" --path $EXP_PATH/reader
 
 echo "Training generators"
 python -u -m src.generator \
-	   --reader_path $EXP_PATH/reader.pkl \
+	   --data_path $EXP_PATH/reader.pkl \
     	   --save_path $EXP_PATH \
 	   --generate \
 	   --gpu \
