@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+#!/usr/bin/env
 
 import random; random.seed(1000)
 from collections import defaultdict
@@ -73,7 +73,7 @@ class DataReader(object):
             return (gener_authors, gener_titles, gener_texts), \
                 (rest_authors, rest_titles, rest_texts), None
 
-    def save(self, path, gener_size=.4, discrim_size=.6, **kwargs):
+    def save(self, path, gener_size=.5, discrim_size=.5, **kwargs):
         fname = path if path.endswith('.pkl') else path + '.pkl'
         try:
             with open(fname, 'wb') as f:

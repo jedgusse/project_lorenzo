@@ -1,6 +1,7 @@
 #!/usr/bin/env
 
 import os
+import math
 import random
 import copy
 import multiprocessing
@@ -22,7 +23,11 @@ from seqmod.misc.dataset import BlockDataset, Dict
 from seqmod.utils import save_model, load_model
 
 from src.data import DataReader
-from src.utils import generate_docs, train_generator, crop_docs, sample
+from src.utils import generate_docs, train_generator, crop_docs
+from src.utils import sample, load_docs_from_dir
+
+
+TINY = 1e-10
 
 
 def make_generator_hook(max_words=100):
@@ -78,7 +83,6 @@ class BasisGenerator(object):
             sent = ''.join(self.d.vocab[c] for c in hyp)
             sent = sent.replace('<bos>', '').replace('<eos>', '')
             return sent, score
-
         sent, score = generate_sent(max_tries=max_tries, **kwargs)
         seed_text, doc, words, scores = None, [sent], 0, [score]
         while words < max_words:
@@ -163,6 +167,10 @@ class LMGenerator(LM, BasisGenerator):
             self.cuda()
         trainer.train(epochs, checkpoint=checkpoints_per_epoch, gpu=gpu)
 
+    def perplexity(self, examples):
+        chars = [c for l in self.d.transform(examples) for c in l]
+        return math.exp(-self.predict_proba(chars))
+
     def copy(self):
         self.cpu()     # ensure model is in cpu to avoid exploding gpu
         return super(self, LMGenerator).copy()
@@ -181,26 +189,30 @@ class UnsmoothedLMGenerator(BasisGenerator):
         self.lm = defaultdict(Counter)
         self.pad_token = '<bos>'
 
-    def fit(self, examples, d, *args, **kwargs):
-        self.examples = examples
-        data = [c for l in d.transform(examples) for c in l]
-        data = [d.index(self.pad_token)] * self.order + data
-        self.d = d
-
+    def _ngrams(self, examples):
+        data = [c for l in self.d.transform(examples) for c in l]
+        data = [self.d.index(self.pad_token)] * self.order + data
         for i in range(len(data) - self.order):
             history, char = data[i:i+self.order], data[i+self.order]
+            yield history, char
+
+    def fit(self, examples, d, *args, **kwargs):
+        self.examples = examples
+        self.d = d
+
+        for history, char in self._ngrams(examples):
             self.lm[tuple(history)][char] += 1
 
         def normalize(counter):
             s = float(sum(counter.values()))
-            return [(c, cnt/s) for c, cnt in counter.items()]
+            return {c: cnt/s for c, cnt in counter.items()}
 
         self.lm = {hist: normalize(chars) for hist, chars in self.lm.items()}
 
     def generate_char(self, seed, d):
         seed = seed[-self.order:]  # seed is ints
         dist = self.lm[tuple(seed)]
-        values, probs = zip(*dist)
+        values, probs = zip(*dist.items())
         idx = sample(np.array(list(probs)))
         score, char = probs[idx], values[idx]
         return score, char
@@ -221,17 +233,35 @@ class UnsmoothedLMGenerator(BasisGenerator):
                 break
         return [functools.reduce(operator.mul, scores)], [hyp]
 
+    def perplexity(self, examples):
+        prob, nb_preds = 0., 0
+        for history, char in self._ngrams(examples):
+            nb_preds += 1
+            try:
+                dist = self.lm[tuple(history)]
+                if not isinstance(dist, dict):  # legacy code
+                    self.lm = {hist: {c: p for c, p in dists}
+                               for hist, dists in self.lm.items()}
+                    dist = dict(dist)
+                char_prob = dist[char]
+            except KeyError:
+                # char_prob = TINY  # smooth
+                nb_preds -= 1
+                continue
+            prob += math.log(char_prob)
+        return math.exp(-prob / nb_preds)
+
 
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     # data
-    parser.add_argument('--reader_path',
+    parser.add_argument('--data_path',
                         help='Required if generator_path is not given.')
     parser.add_argument('--save_path', required=True)
-    parser.add_argument('--max_words', default=2000, type=int,
+    parser.add_argument('--nb_words', default=2000, type=int,
                         help='Number of words per generated doc')
-    parser.add_argument('--max_words_train', default=False, type=int,
+    parser.add_argument('--max_words', default=0, type=int,
                         help='Crop train docs to this number of words')
     parser.add_argument('--generate', action='store_true',
                         help='Whether to generate and store docs. ' +
@@ -240,14 +270,18 @@ if __name__ == '__main__':
                         help='Number of generated docs per author')
     parser.add_argument('--generator_path', help='Path with ' +
                         'generators for loading (no training involved)')
+    parser.add_argument('--n_jobs', type=int, default=1)
+    parser.add_argument('--author_selection')
     # train
     parser.add_argument('--batch_size', default=50, type=int)
     parser.add_argument('--bptt', default=50, type=int)
     parser.add_argument('--epochs', default=10, type=int)
+    parser.add_argument('--lr', default=0.001, type=float)
+    parser.add_argument('--optim_method', default='Adam')
     parser.add_argument('--gpu', action='store_true')
     parser.add_argument('--add_hook', action='store_true')
     # model
-    parser.add_argument('--model', default='rnn')
+    parser.add_argument('--model', default='rnn_lm')
     parser.add_argument('--order', type=int, default=6)
     parser.add_argument('--emb_dim', default=24, type=int)
     parser.add_argument('--hid_dim', default=200, type=int)
@@ -256,26 +290,40 @@ if __name__ == '__main__':
 
     if not os.path.isdir(args.save_path):
         os.mkdir(args.save_path)
+    if not os.path.isdir(os.path.join(args.save_path, 'generators')):
+        os.mkdir(os.path.join(args.save_path, 'generators'))
+
+    keep_author = lambda author: True
+    if args.author_selection:
+        keep = set([author.replace('_', ' ')
+                    for author in args.author_selection.split(',')])
+        keep_author = lambda author: author in keep
 
     model_authors = {}
     if args.generator_path is not None:
         # load generators
         for f in os.listdir(args.generator_path):
-            if not f.endswith('pt'):
+            if not f.endswith('pt') and not f.endswith('pkl'):
                 continue
             author = os.path.basename(f).split('.')[0].replace('_', ' ')
-            model_authors[author] = os.path.join(args.generator_path, f)
+            if keep_author(author):
+                model_authors[author] = os.path.join(args.generator_path, f)
     else:
         # load data
-        reader = DataReader.load(args.reader_path)
-        train, _, _ = reader.foreground_splits()  # take gener split
-        X_authors, _, X_train = train             # ignore titles
-        if args.max_words_train:
-            X_train = list(crop_docs(X_train, max_words=args.max_words_train))
+        if os.path.isdir(args.data_path):
+            X_train, X_authors = load_docs_from_dir(args.data_path)
+        else:                   # assume it's reader
+            reader = DataReader.load(args.data_path)
+            train, _, _ = reader.foreground_splits()  # take gener split
+            X_authors, _, X_train = train             # ignore titles
+        if args.max_words > 0:
+            X_train = list(crop_docs(X_train, max_words=args.max_words))
         fitted_d = BasisGenerator.fit_vocab(
             [sent for doc in X_train for sent in doc])
         # train generators
         for author in set(X_authors):
+            if not keep_author(author):
+                continue
             examples = [sent for doc_author, doc in zip(X_authors, X_train)
                         for sent in doc if doc_author == author]
             if args.model == 'ngram_lm':
@@ -300,14 +348,16 @@ if __name__ == '__main__':
         generated_path = '%s/generated/' % args.save_path
         if not os.path.isdir(generated_path):
             os.mkdir(generated_path)
-        """
-        Parallel(n_jobs=multiprocessing.cpu_count()//2)(
+        reset_every = 1 if args.model == 'ngram_lm' else 10
+        Parallel(n_jobs=args.n_jobs)(
             delayed(generate_docs)(
-                load_model(fpath), author, args.nb_docs, args.max_words,
-                save=True, path=generated_path)
+                load_model(fpath), author, args.nb_docs, args.nb_words,
+                save=True, path=generated_path, reset_every=reset_every)
             for author, fpath in model_authors.items())
+
         """
         for author, fpath in model_authors.items():
             generate_docs(
                 load_model(fpath), author, args.nb_docs, args.max_words,
                 save=True, path=generated_path)
+        """

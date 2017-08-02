@@ -70,12 +70,12 @@ def pipe_grid_clf(X_train, y_train):
 
     param_grid = [
         {
-            'vectorizer': [TfidfVectorizer(),
+            'vectorizer': [#TfidfVectorizer(),
                            TfidfVectorizer(analyzer='char',
                                            ngram_range=(2, 4))],
-            'vectorizer__use_idf': idfs,
+            #'vectorizer__use_idf': idfs,
             'vectorizer__max_features': n_features_options,
-            'vectorizer__norm': norm_options,
+            #'vectorizer__norm': norm_options,
             'classifier__C': c_options,
             'classifier__kernel': kernel_options,
         },
@@ -140,65 +140,102 @@ def run_test(grid, path, X_test, y_test, le):
 
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="To run omega_alpha, alpha_omega, pass reader_path (or both " +
+        "omega_path and alpha_path), and omit alpha_bar_path. To run " +
+        "alpha_bar_omega once you've run the first experiment, pass " +
+        "alpha_bar_path, reader_path or omega_path and omega_params. " +
+        "To run the self-learning experiments, also pass alpha_path")
     parser.add_argument('output_path', help='Directory to save results')
-    parser.add_argument('--reader_path', help='Reader path', required=True)
-    parser.add_argument('--omega_path', help='Omega docs path', required=True)
-    parser.add_argument('--alpha_path', help='Omega docs path', required=True)
-    parser.add_argument('--alpha_bar_path', help='A-bar path', required=True)
-    parser.add_argument('--omega_params', help='path to file containing the ' +
+    parser.add_argument('--reader_path', help='Reader path')
+    parser.add_argument('--omega_path', help='Omega docs path')
+    parser.add_argument('--alpha_path', help='Omega docs path')
+    parser.add_argument('--alpha_bar_path', help='Path to generated texts.' +
+                        'If given, it will do the alpha_bar experiments.')
+    parser.add_argument('--omega_params', help='Path to file containing the ' +
                         'already grid-searched params of the omega classifer')
-    parser.add_argument('--alpha_params', help='path to file containing the ' +
-                        'already grid-searched params of the alpha classifier')
     parser.add_argument('--max_authors', type=int, default=50, help='Run ' +
                         'experiments for a selection of the max n authors')
     args = parser.parse_args()
 
     # 1 Load documents
-    X_alpha, y_alpha = load_docs_from_dir(args.alpha_path)
-    X_omega, y_omega = load_docs_from_dir(args.omega_path)
-    X_alpha_bar, y_alpha_bar = load_docs_from_dir(args.alpha_bar_path)
-    # 2 Load omega docs from reader
+    X_alpha, y_alpha = None, None
+    X_omega, y_omega = None, None
+    X_alpha_bar, y_alpha_bar = None, None
 
-    # eventually filter authors
-    keep_authors = set([author for author in y_alpha_bar
-                        if author in authors[:args.max_authors]])
-    y_alpha, X_alpha = filter_authors(y_alpha, X_alpha, keep_authors)
-    y_omega, X_omega = filter_authors(y_omega, X_omega, keep_authors)
-    y_alpha_bar, X_alpha_bar = filter_authors(
-        y_alpha_bar, X_alpha_bar, keep_authors)
+    if args.reader_path:
+        reader = DataReader.load(args.reader_path)
+        alpha, omega, _ = reader.foreground_splits()  # use gener split as test
+        (y_alpha, _, X_alpha), (y_omega, _, X_omega) = alpha, omega
+    if args.alpha_path:
+        X_alpha, y_alpha = load_docs_from_dir(args.alpha_path)
+    if args.omega_path:
+        X_omega, y_omega = load_docs_from_dir(args.omega_path)
+    if args.alpha_bar_path:
+        X_alpha_bar, y_alpha_bar = load_docs_from_dir(args.alpha_bar_path)
+
+    # 2 Eventually filter authors
+    keep_authors = set(
+        [a for a in y_alpha_bar if a in authors[:args.max_authors]])
+    if X_alpha is not None:
+        y_alpha, X_alpha = filter_authors(y_alpha, X_alpha, keep_authors)
+    if X_omega is not None:
+        y_omega, X_omega = filter_authors(y_omega, X_omega, keep_authors)
+    if X_alpha_bar is not None:
+        y_alpha_bar, X_alpha_bar = filter_authors(
+            y_alpha_bar, X_alpha_bar, keep_authors)
     # translate author names to labels
     le = preprocessing.LabelEncoder()
-    le.fit(y_alpha)  # assumes that all three datasets have all authors
+    le.fit([author for y in [y_alpha, y_omega, y_alpha_bar] for author in y])
+    print("Fitted %d classes" % len(le.classes_))
+    pprint({a: idx for a, idx in zip(le.classes_, le.transform(le.classes_))})
 
     # 3 Train estimator on alpha, omega and alpha_bar
     # 3.1 Train omega
-    if args.omega_params is not None:
-        print("Loading omega best params")
-        grid_omega = clf_from_params(load_best_params(args.omega_params))
-        grid_omega.fit(docs_to_X(X_omega), le.transform(y_omega))
-    else:
-        print("Training omega")
-        grid_omega = pipe_grid_clf(docs_to_X(X_omega), le.transform(y_omega))
-        # classify alpha only if not loaded
-        omega_alpha_path = os.path.join(args.path, 'omega_alpha')
-        run_test(grid_omega, omega_alpha_path, X_alpha, y_alpha, le)
-    # classify alpha_bar
-    omega_alpha_bar_path = os.path.join(args.path, 'omega_alpha_bar')
-    run_test(grid_omega, omega_alpha_bar_path, X_alpha_bar, y_alpha_bar, le)
+    if X_omega is not None:
+        if args.omega_params is not None:
+            print("Loading omega best params")
+            grid_omega = clf_from_params(load_best_params(args.omega_params))
+            grid_omega.fit(docs_to_X(X_omega), le.transform(y_omega))
+        else:
+            print("Training omega")
+            grid_omega = pipe_grid_clf(docs_to_X(X_omega), le.transform(y_omega))
+            # classify alpha only if not loaded
+            omega_alpha_path = os.path.join(args.output_path, 'omega_alpha')
+            run_test(grid_omega, omega_alpha_path, X_alpha, y_alpha, le)
+    if X_alpha_bar is not None:
+        print("Classifying alpha bar")
+        omega_alpha_bar_path = os.path.join(args.output_path, 'omega_alpha_bar')
+        run_test(grid_omega, omega_alpha_bar_path, X_alpha_bar, y_alpha_bar, le)
 
-    # 3.2 (Eventually) train alpha
-    if args.alpha_params is None:
+    # 3.2 Train alpha
+    if X_alpha is not None and X_alpha_bar is None:
+        assert X_omega, "Need omega docs to perform alpha_omega experiments"
         print("Training alpha")
         grid_alpha = pipe_grid_clf(docs_to_X(X_alpha), le.transform(y_alpha))
         # classify omega
-        alpha_omega_path = os.path.join(args.path, 'alpha_omega')
+        print("Classifying omega")
+        alpha_omega_path = os.path.join(args.output_path, 'alpha_omega')
         run_test(grid_alpha, alpha_omega_path, X_omega, y_omega, le)
 
     # 3.3 Train alpha_bar
-    print("Training alpha-bar")
-    grid_alpha_bar = \
-        pipe_grid_clf(docs_to_X(X_alpha_bar), le.transform(y_alpha_bar))
-    # classify omega
-    alpha_bar_omega_path = os.path.join(args.path, 'alpha_bar_omega')
-    run_test(grid_alpha_bar, alpha_bar_omega_path, X_omega, y_omega, le)
+    if X_alpha_bar is not None:
+        assert X_omega, "Need omega docs to perform X_alpha_bar experiments"
+        print("Training alpha-bar")
+        grid_alpha_bar = \
+            pipe_grid_clf(docs_to_X(X_alpha_bar), le.transform(y_alpha_bar))
+        print("Classifying omega")
+        alpha_bar_omega_path = os.path.join(args.output_path, 'alpha_bar_omega')
+        run_test(grid_alpha_bar, alpha_bar_omega_path, X_omega, y_omega, le)
+
+        # 3.4 Self-training experiment
+        if X_alpha is not None:
+            print("Training alpha+alpha-bar")
+            grid_alpha_alpha_bar = \
+                pipe_grid_clf(docs_to_X(X_alpha_bar + X_alpha),
+                              le.transform(y_alpha + y_alpha_bar))
+            print("Classifying omega")
+            alpha_alpha_bar_omega_path = os.path.join(
+                args.output_path, 'alpha_alpha_bar_omega')
+            run_test(grid_alpha_alpha_bar, alpha_alpha_bar_omega_path,
+                     X_omega, y_omega, le)

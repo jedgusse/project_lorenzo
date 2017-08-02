@@ -50,19 +50,19 @@ EXP_PATH=$EXP_PATH/$MODEL
 for MAX_WORD in "${MAX_WORDS[@]}"; do
     echo "Training generators with max_words $MAX_WORD"
     python -u -m src.generator \
-	   --reader_path $READER_PATH \
+	   --data_path $READER_PATH \
     	   --save_path $EXP_PATH/$MAX_WORD \
 	   --generate \
 	   --model $MODEL \
 	   --gpu \
 	   --batch_size 50 \
 	   --epochs 75 \
-	   --max_words_train $MAX_WORD >> $EXP_PATH/$MAX_WORD.train.log 2>&1
+	   --max_words $MAX_WORD >> $EXP_PATH/$MAX_WORD.train.log 2>&1
     # echo "Training classifier"
     # python -m src.classifier $EXP_PATH/$MAX_WORD \
     # 	   --reader_path $READER_PATH \
     # 	   --generated_path $EXP_PATH/$MAX_WORD/generated \
-    # 	   --max_words_train $MAX_WORD
+    # 	   --max_words $MAX_WORD
 done
 
 # ---*--- END
