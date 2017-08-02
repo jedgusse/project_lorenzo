@@ -174,6 +174,6 @@ if __name__ == '__main__':
     if args.omega_path:
         omega = sample_split(X_omega, y_omega, args.nb_docs, args.nb_words)
         dump_sample(omega, args.omega_path)
-    if args.alpha_params:
+    if args.alpha_path:
         alpha = sample_split(X_alpha, y_alpha, args.nb_docs, args.nb_words)
         dump_sample(alpha, args.alpha_path)

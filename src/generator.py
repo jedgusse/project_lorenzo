@@ -146,7 +146,7 @@ class LMGenerator(LM, BasisGenerator):
         train, valid = BlockDataset(
             examples, self.d, batch_size, bptt, gpu=gpu).splits(
                 test=split, dev=None)
-        criterion = nn.CrossEntropyLoss()
+        criterion = nn.NLLLoss()
         optim = Optimizer(
             self.parameters(), optim_method, lr=lr,
             lr_decay=lr_decay, start_decay_at=start_decay_at,
@@ -308,5 +308,6 @@ if __name__ == '__main__':
             for author, fpath in model_authors.items())
         """
         for author, fpath in model_authors.items():
-            generate_docs(load_model(fpath), author, args.nb_docs, args.max_words,
-                          save=True, path=generated_path)
+            generate_docs(
+                load_model(fpath), author, args.nb_docs, args.max_words,
+                save=True, path=generated_path)
