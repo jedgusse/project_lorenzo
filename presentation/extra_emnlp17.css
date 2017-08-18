@@ -1,0 +1,12 @@
+.reveal h1 { font-size: 1.5em; }
+.reveal h2 { font-size: 1em; }
+.reveal section img {
+    border: 0px;
+    box-shadow: none;
+}
+.slide-header {
+    position: absolute;
+    top:  -30px;
+    left: -20px;
+    /* color: red; */
+}
