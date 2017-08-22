@@ -2,8 +2,8 @@
 
 #+TITLE: Assessing the Stylistic Properties of Neurally Generated Text in Authorship Attribution
 #+AUTHOR: Enrique Manjavacas & Jeroen De Gussem & Walter Daelemans & Mike Kestemont
-#+DATE: 07/09/2017
-# ##+REVEAL_ROOT: ../
+#+DATE: 08/09/2017
+# #+REVEAL_ROOT: ../externals/reveal.js/
 #+OPTIONS: reveal_center:t reveal_progress:t reveal_history:t reveal_control:t
 #+OPTIONS: reveal_keyboard:t reveal_overview:t num:1 reveal_rolling_links:t
 #+OPTIONS: reveal_width:1200 reveal_height:800 toc:nil timestamp:nil reveal_mathjax:t
@@ -18,11 +18,19 @@
 
 * Introduction
 
-** RNNs are a powerful tool for text generation
+** RNN's are a powerful tool for text generation
 
 #+attr_reveal: :frag (roll-in)
     - Neurally generated text makes an authentic impression on readers.
     - Basis for renewed interest in NLG.
+
+#+reveal: split
+#+BEGIN_NOTES
+- RNNs avoid the Markov assumption that constrains NGLMs to modelling very local contexts
+- RNNs seem to encode much more linguistic information
+#+END_NOTES
+
+#+attr_reveal: :frag (roll-in)
     - Hypothetically this is due to its ability to model (very) long-term dependencies...
     - ...which allows it to mimic certain properties of the training data.
 
@@ -35,7 +43,7 @@
 
 ** Character-level Text Generation with LMs
 #+attr_reveal: :frag (roll-in)
-$P(w_1, w_2, ..., w_n) = \prod_i^n P(w_t|w_1, ..., w_{t-1})$
+$P(w_1, w_2, ..., w_n) = P(w_1|eos) * \prod_{i=1}^n P(w_{i+1}|w_1, ..., w_{i})$
 
 *** Sample "n" characters from the Language Model
 #+attr_reveal: :frag (roll-in)
@@ -55,6 +63,7 @@ $P(w_1, w_2, ..., w_n) = \prod_i^n P(w_t|w_1, ..., w_{t-1})$
 $P(w_t) = P(w_t|w_{t-n}, w_{t-(n-1)}, ..., w_{t-1})$
 
 ** RNNLM
+
 Embedding + Hidden RNN Layer + Projection Layer + Softmax
 
 #+REVEAL: split
@@ -62,19 +71,26 @@ Embedding + Hidden RNN Layer + Projection Layer + Softmax
 <img src="./img/rnnlm.svg">
 #+END_HTML
 
-* Experimental setup
+* Assessing the stylistic properties of LMs
 
-** Dataset
+** Experiment idea
+   #+attr_reveal: :frag (roll-in)
+   - Fit LMs (one per author)
+   - Genrate a collection of docs per author through sampling
+   - Apply AA to the resulting synthetic dataset
 
-#+attr_reveal: :frag (roll-in)
-- Patrologia Latina (⩲ 113M words)
-- Ecclesiastical latin texts spanning 10 Centuries
-- Homogeneous institutionalized literary language (L2 language)
-
-#+reveal: split
-#+BEGIN_HTML
-<img src="./img/author_words_docs.svg">
-#+END_HTML
+*** Caveat
+    #+BEGIN_NOTES
+    Controversial, but used as a symplifying assumption to get going
+    #+END_NOTES
+    #+attr_reveal: :frag (roll-in)
+    Assumes algorithmic definition of style
+    #+attr_reveal: :frag (roll-in)
+    #+BEGIN_QUOTE
+    Style is whatever textual properties an algorithm might use in order to successfully 
+    attribute a text to its actual author, without considering whether the
+    properties discovered by the algorithm are stylistic in a narrower sense.
+    #+END_QUOTE
 
 ** Experiment design
 
@@ -83,27 +99,37 @@ Embedding + Hidden RNN Layer + Projection Layer + Softmax
     Maximize comparability of authentic and generated text
     #+attr_reveal: :frag (roll-in)
     - Unequal training size per author for LMs
-    - Unequal training and testing sizes per author for the attributor
+    - Unequal training and testing sizes per author for the attributor (important in AA)
 
-*** Proposed solution
+*** Proposed method
     #+attr_reveal: :frag (roll-in)
-    Sampling procedure to create maximally comparable semi-real sets
+    Procedure to create maximally-comparable semi-authentic sets
     #+attr_reveal: :frag (roll-in)
-    - Random even doc-level split
-    - Create 20 fixed-size docs (5000 words) per split ...
-    - ... we refer to them as $\alpha$ and $\omega$ for simplicity
+    - Random even doc-level split (50%-50%)
+    - Create 20 fixed-size docs (5000 words) per split...  @@html:<span class="fragment">@@Referred to as $\alpha$ and $\omega$ for simplicity@@html:</span>@@
     - For each author, sample a third set ($\bar{\alpha}$) from the author's LM
 
-    #+reveal: split
+*** Attribution Experiments
+    #+BEGIN_NOTES
+    - Defines 5 experiments
+    - Requires training only 3 classifiers (one per dataset)
+    - Account for directionality effects
+    #+END_NOTES
     #+BEGIN_HTML
     <img src="./img/setup.svg">
     #+END_HTML
 
-    #+reveal: split
-    #+attr_reveal: :frag (roll-in)
-    - Account for directionality effects
-    - Ensure equal-size training sets for the LMs
-    - Ensure comparability of authentic and synthetic documents
+** Dataset
+
+#+attr_reveal: :frag (roll-in)
+- Patrologia Latina (⩲ 113M words)
+- Ecclesiastical latin texts spanning 1000 years
+- Homogeneous institutionalized literary language (L2 language)
+
+#+reveal: split
+#+BEGIN_HTML
+<img src="./img/author_words_docs.svg">
+#+END_HTML
 
 ** Model fitting
 
@@ -117,12 +143,12 @@ Embedding + Hidden RNN Layer + Projection Layer + Softmax
 
 Model definition
 #+attr_reveal: :frag (roll-in)
-| Parameter      | Value |
-|----------------+-------|
-| Embedding size |    24 |
-| RNN Cell       |  LSTM |
-| Hidden size    |   200 |
-| Hidden Layers  |     2 |
+| Parameter      |   Value |
+|----------------+---------|
+| Embedding size |      24 |
+| RNN Cell       |    LSTM |
+| Hidden size    |     200 |
+| Hidden Layers  |       2 |
 
 #+reveal: split
 Training
@@ -135,9 +161,9 @@ Training
 | Gradient norm clipping |                   5.0 |
 | Dropout                |      0.3 (RNN output) |
 | Epochs                 |                    50 |
-|------------------------+-----------------------|
-| Validation perplexity  |       4.015 (± 0.183) |
 
+#+reveal: split
+Validation perplexity@@html:: <span class="fragment">4.015 (± 0.183)</span>@@
 
 ** Attributor
 
@@ -145,6 +171,7 @@ Training
 - Linear SVM (scikit-learn) on tf-idf character 2,3,4-grams
 - No word-level features since RNN can produce unseen words
 - Grid-search over parameters
+
 #+attr_reveal: :frag (roll-in)
 | Parameter    | Grid values                   |
 |--------------+-------------------------------|
@@ -153,216 +180,97 @@ Training
 
 * Results
 
-5-fold cross-validated scores for all 5 experiments
+5-fold cross-validated scores per experiment
+
+** Numbers
+ #+BEGIN_NOTES
+ - Very small directionality effect (confirm no artifacts from split)
+ - Training on generated data: drops considerably (both NGLM and RNNLM)
+ - Training on real data: improvement on NGLM, still drop for the RNN
+ #+END_NOTES
+ #+include: "table.html" html
+
+** Discussion
+
+- Why does NGLM outperforms RNNLM in both setups (alpha_bar,omega), (omega,alpha_bar)?
+- Why does NGLM outperforms Real setup in (omega, alpha)?
+
+-> SVM uses very local features, NGLM reproduces very well the local distribution
+(- show the PCA plots)
+
+** Analyses and Visualizations
+
+- Unfortunately we can only use local information (ngrams) to visualize the difference between the learned distribution and the real generative distribution. And this only by inspecting generated samples (and not the model itself).
+
+*** Doc-level PCA
+#+reveal: split
+NGLM (150 most-freq ngrams doc-representation)
+#+BEGIN_HTML
+<img src="./img/nglm_pca.svg">
+#+END_HTML
 
 #+reveal: split
+RNNLM (150 most-freq ngrams doc-representation)
+#+BEGIN_HTML
+<img src="./img/rnnlm_pca.svg">
+#+END_HTML
+
+*** Lexical overlap
+
+Mean-normalized Jaccard-similarity on author ngrams
+
+#+reveal: split
+Character-level
+
+#+BEGIN_HTML
+<img src="./img/jaccard_mean_char.svg">
+#+END_HTML
+
+#+reveal: split
+Word-level
+
+#+BEGIN_HTML
+<img src="./img/jaccard_mean.svg">
+#+END_HTML
+
+* Self-learning / data-augmentation
+
+#+attr_reveal: :frag (roll-in)
+- Is there some authorial signal in the RNNLM-generated data?
+- If so, augmenting the authentic training data with RNNLM-generated data _may_ yield attribution improvements
+
+** Experiment 
+#+BEGIN_NOTES
+For each author, concatenate authentic document collection with the generated one.
+#+END_NOTES
+#+attr_reveal: :frag (roll-in)
+$<\alpha+\bar{\alpha}, \omega>$
+
+** Numbers
+
+#+BEGIN_NOTES
+- RNNLM increases (even over the <$\alpha, \omega$> baseline)
+- NGLM
+#+END_NOTES
+#+reveal: split
+#+include: "table_full.html" html
+
+#+reveal: split
+#+BEGIN_NOTES
+- Effect seems to be skewing the f1 distribution towards the top.
+- (helping some guys to be more easlity attributed)
+#+END_NOTES
 #+BEGIN_HTML
 <img src="./img/f1_sampled.svg">
 #+END_HTML
 
-** 
-:PROPERTIES:
-:REVEAL_DATA_TRANSITION: none
-:END:
-#+BEGIN_HTML
-<table id="TBL-1" class="tabular" 
-cellspacing="0" cellpadding="0"  
-><colgroup id="TBL-1-1g"><col 
-id="TBL-1-1"><col 
-id="TBL-1-2"><col 
-id="TBL-1-3"><col 
-id="TBL-1-4"><col 
-id="TBL-1-5"></colgroup><tr  
- style="vertical-align:baseline;" id="TBL-1-1-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-1-1"  
-class="td11">Source  </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-1-2"  
-class="td11">Experiment  </td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-1-3"  
-class="td11"> F1  </td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-1-4"  
-class="td11">  P  </td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-1-5"  
-class="td11"> R  </td>
-</tr><tr  
- style="vertical-align:baseline;" id="TBL-1-2-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-2-1"  
-class="td11">Real     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-2-2"  
-class="td11"><span 
-class="cmmi-10">&#x003C; &alpha;,&omega; &#x003E;     </span></td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-2-3"  
-class="td11"> 0.833 </td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-2-4"  
-class="td11">0.818</td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-2-5"  
-class="td11">0.869</td>
-</tr><tr  
- style="vertical-align:baseline;" id="TBL-1-3-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-3-1"  
-class="td11">       </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-3-2"  
-class="td11"><span 
-class="cmmi-10">&#x003C; &omega;,&alpha; &#x003E;     </span></td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-3-3"  
-class="td11"> 0.811 </td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-3-4"  
-class="td11">0.795</td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-3-5"  
-class="td11">0.853</td>
-</tr><tr  
- style="vertical-align:baseline;" id="TBL-1-4-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-4-1"  
-class="td11">NGLM  </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-4-2"  
-class="td11"><span 
-class="cmmi-10">&#x003C; &alpha; </span>+ <span class="bar-css"><span 
-class="cmmi-10">&alpha;</span></span><span 
-class="cmmi-10">,&omega; &#x003E;</span></td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-4-3"  
-class="td11"> 0.814 </td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-4-4"  
-class="td11">0.809</td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-4-5"  
-class="td11">0.850</td>
-</tr><tr  
- style="vertical-align:baseline;" id="TBL-1-5-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-5-1"  
-class="td11">       </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-5-2"  
-class="td11"><span 
-class="cmmi-10">&#x003C;</span> <span class="bar-css"><span 
-class="cmmi-10">&alpha;</span></span><span 
-class="cmmi-10">,&omega; &#x003E;     </span></td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-5-3"  
-class="td11"> 0.706 </td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-5-4"  
-class="td11">0.744</td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-5-5"  
-class="td11">0.750</td>
-</tr><tr  
- style="vertical-align:baseline;" id="TBL-1-6-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-6-1"  
-class="td11">       </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-6-2"  
-class="td11"><span 
-class="cmmi-10">&#x003C; &omega;,</span><span class="bar-css"><span 
-class="cmmi-10">&alpha;</span></span> <span 
-class="cmmi-10">&#x003E;     </span></td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-6-3"  
-class="td11"><span 
-class="cmbx-10">0.837</span></td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-6-4"  
-class="td11">0.811</td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-6-5"  
-class="td11">0.881</td>
-</tr><tr  
- style="vertical-align:baseline;" id="TBL-1-7-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-7-1"  
-class="td11">RNNLM</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-7-2"  
-class="td11"><span 
-class="cmmi-10">&#x003C; &alpha; </span>+ <span class="bar-css"><span 
-class="cmmi-10">&alpha;</span></span><span 
-class="cmmi-10">,&omega; &#x003E;</span></td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-7-3"  
-class="td11"><span 
-class="cmbx-10">0.872</span></td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-7-4"  
-class="td11">0.878</td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-7-5"  
-class="td11">0.892</td>
-</tr><tr  
- style="vertical-align:baseline;" id="TBL-1-8-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-8-1"  
-class="td11">       </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-8-2"  
-class="td11"><span 
-class="cmmi-10">&#x003C;</span> <span class="bar-css"><span 
-class="cmmi-10">&alpha;</span></span><span 
-class="cmmi-10">,&omega; &#x003E;     </span></td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-8-3"  
-class="td11"> 0.635 </td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-8-4"  
-class="td11">0.701</td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-8-5"  
-class="td11">0.658</td>
-</tr><tr  
- style="vertical-align:baseline;" id="TBL-1-9-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-9-1"  
-class="td11">       </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-9-2"  
-class="td11"><span 
-class="cmmi-10">&#x003C; &omega;,</span><span class="bar-css"><span 
-class="cmmi-10">&alpha;</span></span> <span 
-class="cmmi-10">&#x003E;     </span></td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-9-3"  
-class="td11"> 0.724 </td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-9-4"  
-class="td11">0.778</td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-9-5"  
-class="td11">0.775</td>
+** Discussion
 
-</tr><tr  
- style="vertical-align:baseline;" id="TBL-1-10-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-10-1"  
-class="td11"></td></tr></table>
-#+END_HTML
-
-** 
-:PROPERTIES:
-:REVEAL_DATA_TRANSITION: none
-:END:
-#+BEGIN_HTML
-<table id="TBL-1" class="tabular" 
-cellspacing="0" cellpadding="0"  
-><colgroup id="TBL-1-1g"><col 
-id="TBL-1-1"><col 
-id="TBL-1-2"><col 
-id="TBL-1-3"><col 
-id="TBL-1-4"><col 
-id="TBL-1-5"></colgroup><tr  
- style="vertical-align:baseline;" id="TBL-1-1-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-1-1"  
-class="td11">Source  </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-1-2"  
-class="td11">Experiment  </td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-1-3"  
-class="td11"> F1  </td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-1-4"  
-class="td11">  P  </td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-1-5"  
-class="td11"> R  </td>
-</tr><tr  
- style="vertical-align:baseline;" id="TBL-1-2-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-2-1"  
-class="td11">Real     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-2-2"  
-class="td11"><span 
-class="cmmi-10">&#x003C; &alpha;,&omega; &#x003E;     </span></td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-2-3"  
-class="td11"> 0.833 </td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-2-4"  
-class="td11">0.818</td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-2-5"  
-class="td11">0.869</td>
-</tr><tr  
- style="vertical-align:baseline;" id="TBL-1-3-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-3-1"  
-class="td11">       </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-3-2"  
-class="td11"><span 
-class="cmmi-10">&#x003C; &omega;,&alpha; &#x003E;     </span></td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-3-3"  
-class="td11"> 0.811 </td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-3-4"  
-class="td11">0.795</td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-3-5"  
-class="td11">0.853</td>
-</tr><tr  
- style="vertical-align:baseline;" id="TBL-1-4-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-4-1"  
-class="td11">NGLM  </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-4-2"  
-class="td11"><span 
-class="cmmi-10">&#x003C; &alpha; </span>+ <span class="bar-css"><span 
-class="cmmi-10">&alpha;</span></span><span 
-class="cmmi-10">,&omega; &#x003E;</span></td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-4-3"  
-class="td11"> 0.814 </td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-4-4"  
-class="td11">0.809</td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-4-5"  
-class="td11">0.850</td>
-</tr><tr  
- style="vertical-align:baseline;" id="TBL-1-5-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-5-1"  
-class="td11">       </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-5-2"  
-class="td11"><span 
-class="cmmi-10">&#x003C;</span> <span class="bar-css"><span 
-class="cmmi-10">&alpha;</span></span><span 
-class="cmmi-10">,&omega; &#x003E;     </span></td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-5-3"  
-class="td11"> 0.706 </td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-5-4"  
-class="td11">0.744</td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-5-5"  
-class="td11">0.750</td>
-</tr><tr  
- style="vertical-align:baseline;" id="TBL-1-6-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-6-1"  
-class="td11">       </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-6-2"  
-class="td11"><span 
-class="cmmi-10">&#x003C; &omega;,</span><span class="bar-css"><span 
-class="cmmi-10">&alpha;</span></span> <span 
-class="cmmi-10">&#x003E;     </span></td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-6-3"  
-class="td11"><span 
-class="cmbx-10"><strong>0.837</strong></span></td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-6-4"  
-class="td11">0.811</td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-6-5"  
-class="td11">0.881</td>
-</tr><tr  
- style="vertical-align:baseline;" id="TBL-1-7-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-7-1"  
-class="td11">RNNLM</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-7-2"  
-class="td11"><span 
-class="cmmi-10">&#x003C; &alpha; </span>+ <span class="bar-css"><span 
-class="cmmi-10">&alpha;</span></span><span 
-class="cmmi-10">,&omega; &#x003E;</span></td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-7-3"  
-class="td11"><span 
-class="cmbx-10"><strong>0.872</strong></span></td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-7-4"  
-class="td11">0.878</td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-7-5"  
-class="td11">0.892</td>
-</tr><tr  
- style="vertical-align:baseline;" id="TBL-1-8-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-8-1"  
-class="td11">       </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-8-2"  
-class="td11"><span 
-class="cmmi-10">&#x003C;</span> <span class="bar-css"><span 
-class="cmmi-10">&alpha;</span></span><span 
-class="cmmi-10">,&omega; &#x003E;     </span></td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-8-3"  
-class="td11"> 0.635 </td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-8-4"  
-class="td11">0.701</td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-8-5"  
-class="td11">0.658</td>
-</tr><tr  
- style="vertical-align:baseline;" id="TBL-1-9-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-9-1"  
-class="td11">       </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-9-2"  
-class="td11"><span 
-class="cmmi-10">&#x003C; &omega;,</span><span class="bar-css"><span 
-class="cmmi-10">&alpha;</span></span> <span 
-class="cmmi-10">&#x003E;     </span></td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-9-3"  
-class="td11"> 0.724 </td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-9-4"  
-class="td11">0.778</td><td  style="white-space:nowrap; text-align:center;" id="TBL-1-9-5"  
-class="td11">0.775</td></tr><tr  
- style="vertical-align:baseline;" id="TBL-1-10-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-10-1"  
-class="td11"></td></tr></table>
-#+END_HTML
+   #+attr_reveal: :frag (roll-in)
+   -> Generative distribution is closer to the original distribution.
+   #+attr_reveal: :frag (roll-in)
+   -> The long-term dependencies prove beneficial (not redundant).
 
 * Conclusion
 
+- TODO: Show some bullets points

@@ -1,0 +1,19 @@
+\documentclass[14pt]{article}
+\usepackage{booktabs}
+\begin{document}
+\begin{table}
+	\hskip-0.5cm\begin{tabular}{llccc}
+	\toprule
+	Source & Experiment & F1 & P & R \\
+	\midrule
+	Real & $<\alpha,\omega>$ &  0.833 &      0.818 &   0.869 \\
+   	  	 & $<\omega,\alpha>$ &  0.811 &      0.795 &   0.853 \\
+	NGLM & $<\bar{\alpha},\omega>$ &  0.706 &      0.744 &   0.750 \\
+     	  & $<\omega,\bar{\alpha}>$ &  0.837 &      0.811 &   0.881 \\
+	RNNLM & $<\bar{\alpha},\omega>$ &  0.635 &      0.701 &   0.658 \\
+        & $<\omega,\bar{\alpha}>$ &  0.724 &      0.778 &   0.775 \\
+	\bottomrule
+	\end{tabular}
+}
+\end{table}
+\end{document}
