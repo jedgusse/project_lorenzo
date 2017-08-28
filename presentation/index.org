@@ -18,7 +18,7 @@
 
 * Introduction
 
-** RNN's are a powerful tool for text generation
+** RNNs are a powerful tool for text generation
 
 #+attr_reveal: :frag (roll-in)
     - Neurally generated text makes an authentic impression on readers.
@@ -35,56 +35,57 @@
     - ...which allows it to mimic certain properties of the training data.
 
 ** Evaluation of neural synthetic text through Authorship Attribution
-#+attr_reveal: :frag (roll-in)
-- To what extent does the inferred generative distribution retain author-related stylistic properties of the empirical distribution?
-- How does it compare to traditional n-gram models?
+   #+attr_reveal: :frag (roll-in)
+   - To what extent does the inferred generative distribution retain author-related stylistic properties of the empirical distribution?
+   - How does it compare to traditional n-gram models?
 
 * Text Generation
 
-** Character-level Text Generation with LMs
-#+attr_reveal: :frag (roll-in)
-$P(w_1, w_2, ..., w_n) = P(w_1|eos) * \prod_{i=1}^n P(w_{i+1}|w_1, ..., w_{i})$
+** Character-level Text Generation with Language Models
+   #+attr_reveal: :frag (roll-in)
+   $P(w_1, w_2, ..., w_n) = P(w_1|eos) * \prod_{i=1}^n P(w_{i+1}|w_1, ..., w_{i})$
 
 *** Sample "n" characters from the Language Model
-#+attr_reveal: :frag (roll-in)
+    #+attr_reveal: :frag (roll-in)
     - $w_1 \sim P(w|\text{<}eos\text{>})$
     - $w_2 \sim P(w|\text{<}eos\text{>}, w_1)$
     - $\ldots$
     - $w_n \sim P(w|\text{<}eos\text{>}, w_1, ..., w_{n-1})$
 
 *** Multinomial sampling with temperature
-#+attr_reveal: :frag (roll-in)
-- $w_1 \sim P(w|\text{<}eos\text{>})$
-- $\Rightarrow w_1 = \{p_1, p_2, ..., p_v\}$
-- $p_i^{\tau} = \frac{p_i / \tau}{\sum_j^V p_j / \tau}$
+    #+attr_reveal: :frag (roll-in)
+    - $w_1 \sim P(w|\text{<}eos\text{>})$
+    - $\Rightarrow w_1 = \{p_1, p_2, ..., p_v\}$
+    - $p_i^{\tau} = \frac{p_i / \tau}{\sum_j^V p_j / \tau}$
 
 ** NGLM
-#+attr_reveal: :frag (roll-in)
-$P(w_t) = P(w_t|w_{t-n}, w_{t-(n-1)}, ..., w_{t-1})$
+   #+attr_reveal: :frag (roll-in)
+   $P(w_t) = P(w_t|w_{t-n}, w_{t-(n-1)}, ..., w_{t-1})$
 
 ** RNNLM
 
-Embedding + Hidden RNN Layer + Projection Layer + Softmax
+   Embedding + Hidden RNN Layer + Projection Layer + Softmax
 
-#+REVEAL: split
-#+BEGIN_HTML
-<img src="./img/rnnlm.svg">
-#+END_HTML
+   #+REVEAL: split
+   #+BEGIN_HTML
+   <img src="./img/rnnlm.svg">
+   #+END_HTML
 
 * Assessing the stylistic properties of LMs
 
 ** Experiment idea
    #+attr_reveal: :frag (roll-in)
    - Fit LMs (one per author)
-   - Genrate a collection of docs per author through sampling
+   - Generate a collection of docs per author through sampling
    - Apply AA to the resulting synthetic dataset
 
-*** Caveat
+*** Assumptions
     #+BEGIN_NOTES
-    Controversial, but used as a symplifying assumption to get going
+    Controversial, but used as a symplifying assumption to get going.
+    Of course, we could bias the algorithm towards stylistic props.
     #+END_NOTES
     #+attr_reveal: :frag (roll-in)
-    Assumes algorithmic definition of style
+    "Algorithmic" definition of style
     #+attr_reveal: :frag (roll-in)
     #+BEGIN_QUOTE
     Style is whatever textual properties an algorithm might use in order to successfully 
@@ -99,14 +100,14 @@ Embedding + Hidden RNN Layer + Projection Layer + Softmax
     Maximize comparability of authentic and generated text
     #+attr_reveal: :frag (roll-in)
     - Unequal training size per author for LMs
-    - Unequal training and testing sizes per author for the attributor (important in AA)
+    - Unequal training and test size per author for the attributor (important in AA)
 
 *** Proposed method
     #+attr_reveal: :frag (roll-in)
     Procedure to create maximally-comparable semi-authentic sets
     #+attr_reveal: :frag (roll-in)
     - Random even doc-level split (50%-50%)
-    - Create 20 fixed-size docs (5000 words) per split...  @@html:<span class="fragment">@@Referred to as $\alpha$ and $\omega$ for simplicity@@html:</span>@@
+    - Create 20 fixed-size docs (5000 words) per split...  @@html:<span class="fragment">@@referred to as $\alpha$ and $\omega$ for simplicity@@html:</span>@@
     - For each author, sample a third set ($\bar{\alpha}$) from the author's LM
 
 *** Attribution Experiments
@@ -134,53 +135,56 @@ Embedding + Hidden RNN Layer + Projection Layer + Softmax
 ** Model fitting
 
 *** NGLM
-
-#+attr_reveal: :frag (roll-in)
-- N-gram order is set to 6
-- Parameters estimated through MLE (no smoothing since only interested in generation)
+    #+attr_reveal: :frag (roll-in)
+    - N-gram order is set to 6
+    - Parameters estimated through MLE (no smoothing since only interested in generation)
 
 *** RNNLM
 
-Model definition
-#+attr_reveal: :frag (roll-in)
-| Parameter      |   Value |
-|----------------+---------|
-| Embedding size |      24 |
-| RNN Cell       |    LSTM |
-| Hidden size    |     200 |
-| Hidden Layers  |       2 |
+    Model definition
+    #+attr_reveal: :frag (roll-in)
+    | Parameter      |   Value |
+    |----------------+---------|
+    | Embedding size |      24 |
+    | RNN Cell       |    LSTM |
+    | Hidden size    |     200 |
+    | Hidden Layers  |       2 |
 
-#+reveal: split
-Training
-#+attr_reveal: :frag (roll-in)
-| Parameter              |                 Value |
-|------------------------+-----------------------|
-| Batch size             |                    50 |
-| Optimizer              | Adam (default params) |
-| Learning rate          |                 0.001 |
-| Gradient norm clipping |                   5.0 |
-| Dropout                |      0.3 (RNN output) |
-| Epochs                 |                    50 |
+    #+reveal: split
+    Training
+    #+attr_reveal: :frag (roll-in)
+    | Parameter              |                 Value |
+    |------------------------+-----------------------|
+    | Batch size             |                    50 |
+    | Optimizer              | Adam (default params) |
+    | Learning rate          |                 0.001 |
+    | Gradient norm clipping |                   5.0 |
+    | Dropout                |      0.3 (RNN output) |
+    | Epochs                 |                    50 |
 
-#+reveal: split
-Validation perplexity@@html:: <span class="fragment">4.015 (± 0.183)</span>@@
+    #+reveal: split
+    Validation perplexity@@html:: <span class="fragment"><strong>4.015 (± 0.183)</strong></span>@@
 
 ** Attributor
+   
+   #+BEGIN_NOTES
+   - max-features: ordered by term-freq
+   - small grid, since computationally expensive (5-fold CV + 7 experiments)
+   #+END_NOTES
+   #+attr_reveal: :frag (roll-in)
+   - Linear SVM (scikit-learn) on tf-idf character 2,3,4-grams
+   - No word-level features since RNN can produce unseen words
+   - Grid-search over parameters
 
-#+attr_reveal: :frag (roll-in)
-- Linear SVM (scikit-learn) on tf-idf character 2,3,4-grams
-- No word-level features since RNN can produce unseen words
-- Grid-search over parameters
-
-#+attr_reveal: :frag (roll-in)
-| Parameter    | Grid values                   |
-|--------------+-------------------------------|
-| Max-features | 5,000; 10,000; 15,000; 30,000 |
-| C            | 1; 10; 100; 1,000             |
+   #+attr_reveal: :frag (roll-in)
+   | Parameter    | Grid values                   |
+   |--------------+-------------------------------|
+   | Max-features | 5,000; 10,000; 15,000; 30,000 |
+   | C            | 1; 10; 100; 1,000             |
 
 * Results
-
-5-fold cross-validated scores per experiment
+  
+  5-fold cross-validated scores per experiment
 
 ** Numbers
  #+BEGIN_NOTES
@@ -192,52 +196,67 @@ Validation perplexity@@html:: <span class="fragment">4.015 (± 0.183)</span>@@
 
 ** Discussion
 
-- Why does NGLM outperforms RNNLM in both setups (alpha_bar,omega), (omega,alpha_bar)?
-- Why does NGLM outperforms Real setup in (omega, alpha)?
-
--> SVM uses very local features, NGLM reproduces very well the local distribution
-(- show the PCA plots)
-
-** Analyses and Visualizations
-
-- Unfortunately we can only use local information (ngrams) to visualize the difference between the learned distribution and the real generative distribution. And this only by inspecting generated samples (and not the model itself).
-
-*** Doc-level PCA
-#+reveal: split
-NGLM (150 most-freq ngrams doc-representation)
-#+BEGIN_HTML
-<img src="./img/nglm_pca.svg">
-#+END_HTML
-
-#+reveal: split
-RNNLM (150 most-freq ngrams doc-representation)
-#+BEGIN_HTML
-<img src="./img/rnnlm_pca.svg">
-#+END_HTML
-
-*** Lexical overlap
-
-Mean-normalized Jaccard-similarity on author ngrams
-
-#+reveal: split
-Character-level
-
-#+BEGIN_HTML
-<img src="./img/jaccard_mean_char.svg">
-#+END_HTML
-
-#+reveal: split
-Word-level
-
-#+BEGIN_HTML
-<img src="./img/jaccard_mean.svg">
-#+END_HTML
-
-* Self-learning / data-augmentation
+*** Why does NGLM outperforms RNNLM in both setups (<$\bar{\alpha}$,$\omega$>), (<$\omega$,$\bar{\alpha}$>)?
 
 #+attr_reveal: :frag (roll-in)
-- Is there some authorial signal in the RNNLM-generated data?
-- If so, augmenting the authentic training data with RNNLM-generated data _may_ yield attribution improvements
+SVM uses very local features, NGLM reproduces very well the local distribution
+
+#+BEGIN_NOTES
+- Unfortunately we can only use local information (ngrams) to visualize the difference between the learned distribution and the real generative distribution. And this only by inspecting generated samples (and not the model itself).
+
+#+END_NOTES
+
+**** Doc-level PCA
+
+     #+BEGIN_NOTES
+     
+     #+END_NOTES
+
+     NGLM (150 most-freq ngrams doc-representation)
+     #+BEGIN_HTML
+     <img src="./img/nglm_pca.svg">
+     #+END_HTML
+
+     #+reveal: split
+     RNNLM (150 most-freq ngrams doc-representation)
+     #+BEGIN_HTML
+     <img src="./img/rnnlm_pca.svg">
+     #+END_HTML
+
+**** Lexical overlap
+
+     #+BEGIN_NOTES
+     jaccard: intersection / union
+     #+END_NOTES
+
+     Mean-normalized Jaccard-similarity on author ngrams
+
+     #+reveal: split
+     Character-level
+     #+BEGIN_HTML
+     <img src="./img/jaccard_mean_char.svg">
+     #+END_HTML
+
+     #+reveal: split
+     Word-level
+     #+BEGIN_HTML
+     <img src="./img/jaccard_mean.svg">
+     #+END_HTML
+
+*** Why does NGLM outperforms Real setup in ($\omega$, $\alpha$)?
+
+#+BEGIN_NOTES
+We haven't done any further analysis but...
+#+END_NOTES
+#+attr_reveal: :frag (roll-in)
+- Prunning effect?, eliminating "distractive" features and enhancing those that are more relevant
+- It might prove beneficial for actual AA
+
+* Self-learning (Data-augmentation) Experiments 
+
+  #+attr_reveal: :frag (roll-in)
+  - Is there some authorial signal in the RNNLM-generated data?
+  - If so, augmenting the authentic training data with RNNLM-generated data _may_ yield attribution improvements
 
 ** Experiment 
 #+BEGIN_NOTES
@@ -270,7 +289,7 @@ $<\alpha+\bar{\alpha}, \omega>$
    -> Generative distribution is closer to the original distribution.
    #+attr_reveal: :frag (roll-in)
    -> The long-term dependencies prove beneficial (not redundant).
-
+   
 * Conclusion
 
 - TODO: Show some bullets points
