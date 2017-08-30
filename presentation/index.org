@@ -13,63 +13,31 @@
 #+REVEAL_TRANS: slide
 #+REVEAL_SPEED: fast
 #+REVEAL_THEME: solarized
-#+REVEAL_HLEVEL: 3
+#+REVEAL_HLEVEL: 1
 #+REVEAL_EXTRA_CSS: ./extra_emnlp17.css
 
 * Introduction
 
 ** RNNs are a powerful tool for text generation
 
-#+attr_reveal: :frag (roll-in)
-    - Neurally generated text makes an authentic impression on readers.
-    - Basis for renewed interest in NLG.
-
-#+reveal: split
-#+BEGIN_NOTES
-- RNNs avoid the Markov assumption that constrains NGLMs to modelling very local contexts
-- RNNs seem to encode much more linguistic information
-#+END_NOTES
-
-#+attr_reveal: :frag (roll-in)
-    - Hypothetically this is due to its ability to model (very) long-term dependencies...
-    - ...which allows it to mimic certain properties of the training data.
+   #+attr_reveal: :frag (roll-in)
+       - Neurally generated text makes an authentic impression on readers.
+       - Basis for renewed interest in NLG.
+   
+   #+reveal: split
+   #+BEGIN_NOTES
+   - RNNs avoid the Markov assumption that constrains NGLMs to modelling very local contexts
+   - RNNs seem to encode much more linguistic information
+   #+END_NOTES
+   
+   #+attr_reveal: :frag (none roll-in)
+       - Hypothetically, this is due to its ability to model (very) long-term dependencies...
+       - ...which allows it to mimic certain properties of the training data.
 
 ** Evaluation of neural synthetic text through Authorship Attribution
    #+attr_reveal: :frag (roll-in)
    - To what extent does the inferred generative distribution retain author-related stylistic properties of the empirical distribution?
    - How does it compare to traditional n-gram models?
-
-* Text Generation
-
-** Character-level Text Generation with Language Models
-   #+attr_reveal: :frag (roll-in)
-   $P(w_1, w_2, ..., w_n) = P(w_1|eos) * \prod_{i=1}^n P(w_{i+1}|w_1, ..., w_{i})$
-
-*** Sample "n" characters from the Language Model
-    #+attr_reveal: :frag (roll-in)
-    - $w_1 \sim P(w|\text{<}eos\text{>})$
-    - $w_2 \sim P(w|\text{<}eos\text{>}, w_1)$
-    - $\ldots$
-    - $w_n \sim P(w|\text{<}eos\text{>}, w_1, ..., w_{n-1})$
-
-*** Multinomial sampling with temperature
-    #+attr_reveal: :frag (roll-in)
-    - $w_1 \sim P(w|\text{<}eos\text{>})$
-    - $\Rightarrow w_1 = \{p_1, p_2, ..., p_v\}$
-    - $p_i^{\tau} = \frac{p_i / \tau}{\sum_j^V p_j / \tau}$
-
-** NGLM
-   #+attr_reveal: :frag (roll-in)
-   $P(w_t) = P(w_t|w_{t-n}, w_{t-(n-1)}, ..., w_{t-1})$
-
-** RNNLM
-
-   Embedding + Hidden RNN Layer + Projection Layer + Softmax
-
-   #+REVEAL: split
-   #+BEGIN_HTML
-   <img src="./img/rnnlm.svg">
-   #+END_HTML
 
 * Assessing the stylistic properties of LMs
 
@@ -93,7 +61,40 @@
     properties discovered by the algorithm are stylistic in a narrower sense.
     #+END_QUOTE
 
-** Experiment design
+* Text Generation
+
+** Character-level Text Generation with Language Models
+   #+attr_reveal: :frag (roll-in)
+   $P(w_1, w_2, ..., w_n) = P(w_1|eos) * \prod_{i=1}^n P(w_{i+1}|w_1, ..., w_{i})$
+
+*** Sample "n" characters from the Language Model
+    #+attr_reveal: :frag (roll-in)
+    - $w_1 \sim P(w|\text{<}eos\text{>})$
+    - $w_2 \sim P(w|\text{<}eos\text{>}, w_1)$
+    - $\ldots$
+    - $w_n \sim P(w|\text{<}eos\text{>}, w_1, ..., w_{n-1})$
+
+*** Multinomial sampling with temperature
+    #+attr_reveal: :frag (roll-in)
+    - $w_1 \sim P(w|\text{<}eos\text{>})$
+    - $\Rightarrow w_1 = \{p_1, p_2, ..., p_v\}$
+    - $p_i^{\tau} = \frac{p_i / \tau}{\sum_j^V p_j / \tau}$
+
+** NGLM
+   #+attr_reveal: :frag (roll-in)
+   $P(w_t) = P(w_t|w_{t-n}, w_{t-n-1)}, ..., w_{t-1})$
+
+** RNNLM
+
+   Embedding + Hidden RNN Layer + Output Layer + Softmax
+
+   #+REVEAL: split
+   [[./img/rnnlm.svg]]
+
+
+* Experiment
+
+** Experimental Setup
 
 *** Difficulties
     #+attr_reveal: :frag (roll-in)
@@ -116,23 +117,24 @@
     - Requires training only 3 classifiers (one per dataset)
     - Account for directionality effects
     #+END_NOTES
-    #+BEGIN_HTML
+
+    #+BEGIN_EXPORT html
     <img src="./img/setup.svg">
-    #+END_HTML
+    #+END_EXPORT
 
 ** Dataset
 
-#+attr_reveal: :frag (roll-in)
-- Patrologia Latina (⩲ 113M words)
-- Ecclesiastical latin texts spanning 1000 years
-- Homogeneous institutionalized literary language (L2 language)
+   #+attr_reveal: :frag (roll-in)
+   - Patrologia Latina (⩲ 113M words)
+   - Ecclesiastical latin texts spanning 1000 years
+   - Homogeneous institutionalized literary language (L2 language)
+   
+   #+reveal: split
+   #+BEGIN_EXPORT html
+   <img src="./img/author_words_docs.svg">
+   #+END_EXPORT
 
-#+reveal: split
-#+BEGIN_HTML
-<img src="./img/author_words_docs.svg">
-#+END_HTML
-
-** Model fitting
+** Language Model Fitting
 
 *** NGLM
     #+attr_reveal: :frag (roll-in)
@@ -187,71 +189,66 @@
   5-fold cross-validated scores per experiment
 
 ** Numbers
- #+BEGIN_NOTES
- - Very small directionality effect (confirm no artifacts from split)
- - Training on generated data: drops considerably (both NGLM and RNNLM)
- - Training on real data: improvement on NGLM, still drop for the RNN
- #+END_NOTES
- #+include: "table.html" html
+
+   #+BEGIN_NOTES
+   - Very small directionality effect (confirm no artifacts from split)
+   - Training on generated data: drops considerably (both NGLM and RNNLM)
+   - Training on real data: improvement on NGLM, still drop for the RNN
+   #+END_NOTES
+  
+   #+INCLUDE: "table.html" export html
 
 ** Discussion
 
-*** Why does NGLM outperforms RNNLM in both setups (<$\bar{\alpha}$,$\omega$>), (<$\omega$,$\bar{\alpha}$>)?
+*** Why does NGLM outperforms RNNLM in both setups ($<\bar{\alpha},\omega>, <\omega,\bar{\alpha}>$)?    
 
-#+attr_reveal: :frag (roll-in)
-SVM uses very local features, NGLM reproduces very well the local distribution
+    #+attr_reveal: :frag (roll-in)
+    SVM uses very local features, NGLM reproduces very well the local distribution
 
-#+BEGIN_NOTES
-- Unfortunately we can only use local information (ngrams) to visualize the difference between the learned distribution and the real generative distribution. And this only by inspecting generated samples (and not the model itself).
-
-#+END_NOTES
-
-**** Doc-level PCA
-
-     #+BEGIN_NOTES
-     
-     #+END_NOTES
-
-     NGLM (150 most-freq ngrams doc-representation)
-     #+BEGIN_HTML
-     <img src="./img/nglm_pca.svg">
-     #+END_HTML
-
-     #+reveal: split
-     RNNLM (150 most-freq ngrams doc-representation)
-     #+BEGIN_HTML
-     <img src="./img/rnnlm_pca.svg">
-     #+END_HTML
-
-**** Lexical overlap
-
-     #+BEGIN_NOTES
-     jaccard: intersection / union
-     #+END_NOTES
-
-     Mean-normalized Jaccard-similarity on author ngrams
-
-     #+reveal: split
-     Character-level
-     #+BEGIN_HTML
-     <img src="./img/jaccard_mean_char.svg">
-     #+END_HTML
-
-     #+reveal: split
-     Word-level
-     #+BEGIN_HTML
-     <img src="./img/jaccard_mean.svg">
-     #+END_HTML
+    #+BEGIN_NOTES
+    - Unfortunately we can only use local information (ngrams) to visualize the difference between the learned distribution and the real generative distribution. And this only by inspecting generated samples (and not the model itself).
+    #+END_NOTES
+  
+    #+reveal: split
+    #+BEGIN_NOTES
+    
+    #+END_NOTES
+    DOC-LEVEL PCA: *NGLM* (150 most-freq ngrams doc-representation)
+    #+BEGIN_EXPORT html
+    <img src="./img/nglm_pca.svg">
+    #+END_EXPORT
+  
+    #+reveal: split
+    #+BEGIN_NOTES
+    
+    #+END_NOTES
+    DOC-LEVEL PCA: *RNNLM* (150 most-freq ngrams doc-representation)
+    #+BEGIN_EXPORT html
+    <img src="./img/rnnlm_pca.svg">
+    #+END_EXPORT
+  
+    #+reveal: split
+    #+BEGIN_NOTES
+    jaccard: intersection / union
+    #+END_NOTES
+    LEXICAL OVERLAP@@html:<span class="fragment fade-in">: Mean-normalized ngram Jaccard-similarity across authors.</span>@@
+  
+    @@html:<span class="fragment fade-in"><strong>Character-level</strong><br/><img src="./img/jaccard_mean_char.svg"></span>@@
+  
+    #+reveal: split
+    LEXICAL OVERLAP: Mean-normalized Jaccard-similarity on author ngrams
+    
+    @@html:<span class="fragment fade-in"><p><strong>Word-level</strong></p><img src="./img/jaccard_mean.svg"></span>@@
 
 *** Why does NGLM outperforms Real setup in ($\omega$, $\alpha$)?
 
-#+BEGIN_NOTES
-We haven't done any further analysis but...
-#+END_NOTES
-#+attr_reveal: :frag (roll-in)
-- Prunning effect?, eliminating "distractive" features and enhancing those that are more relevant
-- It might prove beneficial for actual AA
-
+    #+BEGIN_NOTES
+    We haven't done any further analysis but...
+    #+END_NOTES
+    #+attr_reveal: :frag (roll-in)
+    - Prunning effect? Eliminating "distractive" features and enhancing those that are more relevant
+    - It might prove beneficial for actual AA
+   
 * Self-learning (Data-augmentation) Experiments 
 
   #+attr_reveal: :frag (roll-in)
@@ -259,37 +256,45 @@ We haven't done any further analysis but...
   - If so, augmenting the authentic training data with RNNLM-generated data _may_ yield attribution improvements
 
 ** Experiment 
-#+BEGIN_NOTES
-For each author, concatenate authentic document collection with the generated one.
-#+END_NOTES
-#+attr_reveal: :frag (roll-in)
-$<\alpha+\bar{\alpha}, \omega>$
+   #+BEGIN_NOTES
+   For each author, concatenate authentic document collection with the generated one.
+   #+END_NOTES
+   
+   #+attr_reveal: :frag (roll-in)
+   $<\alpha+\bar{\alpha}, \omega>$
 
 ** Numbers
-
-#+BEGIN_NOTES
-- RNNLM increases (even over the <$\alpha, \omega$> baseline)
-- NGLM
-#+END_NOTES
-#+reveal: split
-#+include: "table_full.html" html
-
-#+reveal: split
-#+BEGIN_NOTES
-- Effect seems to be skewing the f1 distribution towards the top.
-- (helping some guys to be more easlity attributed)
-#+END_NOTES
-#+BEGIN_HTML
-<img src="./img/f1_sampled.svg">
-#+END_HTML
+   
+   #+BEGIN_NOTES
+   - RNNLM increases (even over the <$\alpha, \omega$> baseline)
+   - NGLM
+   #+END_NOTES
+   #+reveal: split
+   #+include: "table_full.html" export html
+   
+   #+reveal: split
+   #+BEGIN_NOTES
+   - Effect seems to be skewing the f1 distribution towards the top.
+   - (helping some guys to be more easlity attributed)
+   #+END_NOTES
+   
+   #+BEGIN_EXPORT html
+   <img src="./img/f1_sampled.svg">
+   #+END_EXPORT
 
 ** Discussion
 
    #+attr_reveal: :frag (roll-in)
-   -> Generative distribution is closer to the original distribution.
-   #+attr_reveal: :frag (roll-in)
    -> The long-term dependencies prove beneficial (not redundant).
+   #+attr_reveal: :frag (roll-in)
+   -> Generative distribution is closer to the original distribution.
    
 * Conclusion
 
-- TODO: Show some bullets points
+  #+BEGIN_NOTES
+  
+  #+END_NOTES
+  - LMs seem to capture stylistic properties to a certain extent.
+  - Although, stylistic evaluation still too local.
+  - RNNLMs seem to exploit (although very data hungry).
+  - Unexpected result: data-augmentation/self-learning with RNNLMs possibly beneficial.
