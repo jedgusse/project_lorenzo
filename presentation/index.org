@@ -267,15 +267,22 @@
    
    #+BEGIN_NOTES
    - RNNLM increases (even over the <$\alpha, \omega$> baseline)
-   - NGLM
+   - NGLM increases with respect to its baseline, but not over the real baseline
    #+END_NOTES
    #+reveal: split
+   # wrap to differentiate from other table
+   #+BEGIN_EXPORT html
+   <div id="table-full">
+   #+END_EXPORT
    #+include: "table_full.html" export html
-   
+   #+BEGIN_EXPORT html
+   </div>
+   #+END_EXPORT
+
    #+reveal: split
    #+BEGIN_NOTES
-   - Effect seems to be skewing the f1 distribution towards the top.
-   - (helping some guys to be more easlity attributed)
+   - Effect seems to be skewing the f1 distribution towards the top 
+   - Rescueing some helplessly mislabeled authors (helping the attribution of some guys)
    #+END_NOTES
    
    #+BEGIN_EXPORT html

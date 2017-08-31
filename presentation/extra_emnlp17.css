@@ -12,3 +12,7 @@
 }
 /* table bar */
 span.bar-css {text-decoration:overline;}
+/* add highlighting to row */
+#table-full tr#TBL-1-4-, #table-full tr#TBL-1-7- {
+    font-weight: bold;
+}
