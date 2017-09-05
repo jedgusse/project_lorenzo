@@ -16,3 +16,8 @@ span.bar-css {text-decoration:overline;}
 #table-full tr#TBL-1-4-, #table-full tr#TBL-1-7- {
     font-weight: bold;
 }
+
+.reveal .slides section .fragment.highlight-green.visible {
+    font-weight: bold;
+    color: #67abd8 !important;
+}

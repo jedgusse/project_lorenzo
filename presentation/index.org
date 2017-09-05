@@ -1,4 +1,4 @@
-# -*- org-reveal-title-slide: "<h1>%t</h1><h2>%a</h2><h4>%d</h4><h4>EMNLP17 (Workshop on Stylistic Variation) - Copenhagen</h4><p><a href=\"https://emanjavacas.github.com/slides/emnlp17\">https://emanjavacas.github.com/slides/emnlp17</a></p>"; -*-
+# -*- org-reveal-title-slide: "<h1>%t</h1><h2>%a</h2><h4>%d</h4><h4>EMNLP17 (Workshop on Stylistic Variation) - Copenhagen</h4><p><a href=\"https://emanjavacas.github.com/slides-content/copenhagen-emnlp-17\">https://emanjavacas.github.com/slides-content/copenhagen-emnlp-17</a></p>"; -*-
 
 #+TITLE: Assessing the Stylistic Properties of Neurally Generated Text in Authorship Attribution
 #+AUTHOR: Enrique Manjavacas & Jeroen De Gussem & Walter Daelemans & Mike Kestemont
@@ -96,19 +96,21 @@
    As a recap
    #+END_NOTES
 
-   #+attr_reveal: :frag (roll-in)
-   $P(w_1, w_2, ..., w_n) = P(w_1|eos) * \prod_{i=1}^n P(w_{i+1}|w_1, ..., w_{i})$
+   @@html:<span class="fragment highlight-green">@@        $P(w_1, w_2, ..., w_n)$ =
+   @@html:</span><span class="fragment highlight-green">@@ $P(w_1|\text{<}bos\text{>})$
+   @@html:</span><span class="fragment highlight-green">@@ $* \prod_{i=1}^n P(w_{i+1}|w_1, ..., w_{i})$
+   @@html:</span>@@
 
 *** Sample "n" characters from the Language Model
     #+attr_reveal: :frag (roll-in)
-    - $w_1 \sim P(w|\text{<}eos\text{>})$
-    - $w_2 \sim P(w|\text{<}eos\text{>}, w_1)$
+    - $w_1 \sim P(w|\text{<}bos\text{>})$
+    - $w_2 \sim P(w|\text{<}bos\text{>}, w_1)$
     - $\ldots$
-    - $w_n \sim P(w|\text{<}eos\text{>}, w_1, ..., w_{n-1})$
+    - $w_n \sim P(w|\text{<}bos\text{>}, w_1, ..., w_{n-1})$
 
 *** Multinomial sampling with temperature
     #+attr_reveal: :frag (roll-in)
-    - $w_1 \sim P(w|\text{<}eos\text{>})$
+    - $w_1 \sim P(w|\text{<}bos\text{>})$
     - $\Rightarrow w_1 = \{p_1, p_2, ..., p_v\}$
     - $p_i^{\tau} = \frac{p_i / \tau}{\sum_j^V p_j / \tau}$
 
@@ -117,14 +119,10 @@
    Introduce Markov Assumption
    #+END_NOTES
 
-   #+attr_reveal: :frag (roll-in)
-   $P(w_t) = P(w_t|w_{t-n}, w_{t-n-1)}, ..., w_{t-1})$
+   $P(w_t|\ldots)$ @@html:<span class="fragment fade-in">@@ $\approx P(w_t|w_{t-(n+1)}, \ldots, w_{t-1})$ @@html:</span>@@
 
 ** RNNLM
 
-   Embedding + Hidden RNN Layer + Output Layer + Softmax
-
-   #+REVEAL: split
    [[./img/rnnlm.svg]]
 
 
@@ -205,7 +203,7 @@
     | Epochs                 |                    50 |
 
     #+reveal: split
-    Validation perplexity@@html:: <span class="fragment"><strong>4.015 (± 0.183)</strong></span>@@
+    Validation perplexity@@html:: <span class="fragment highlight-green"><strong>4.015 (± 0.183)</strong></span>@@
 
 ** Attributor
    
@@ -214,7 +212,7 @@
    - small grid, since computationally expensive (5-fold CV + 7 experiments)
    #+END_NOTES
    #+attr_reveal: :frag (roll-in)
-   - Linear SVM (scikit-learn) on tf-idf character 2,3,4-grams
+   - Linear SVM (scikit-learn) on tf-idf character {2,3,4}-grams
    - No word-level features since RNN can produce unseen words
    - Grid-search over parameters
 
