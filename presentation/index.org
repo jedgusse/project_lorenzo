@@ -3,7 +3,7 @@
 #+TITLE: Assessing the Stylistic Properties of Neurally Generated Text in Authorship Attribution
 #+AUTHOR: Enrique Manjavacas & Jeroen De Gussem & Walter Daelemans & Mike Kestemont
 #+DATE: 08/09/2017
-# #+REVEAL_ROOT: ../externals/reveal.js/
+#+REVEAL_ROOT: ../externals/reveal.js/
 #+OPTIONS: reveal_center:t reveal_progress:t reveal_history:t reveal_control:t
 #+OPTIONS: reveal_keyboard:t reveal_overview:t num:1 reveal_rolling_links:t
 #+OPTIONS: reveal_width:1200 reveal_height:800 toc:nil timestamp:nil reveal_mathjax:t
@@ -19,35 +19,37 @@
 * Introduction
 
   #+BEGIN_NOTES
-  We've been observed a resurgence in interest on Text Generation, allegedly due to the successes harvested by RNN models
-  In this talk we present work on evaluating neurally generated text with respect to its 
+  - In this talk we present work on evaluating neurally generated text with respect to its capacity to preserve authorial style.
   #+END_NOTES
 
 ** RNNs are a powerful tool for text generation
 
    #+BEGIN_NOTES
-   Anecdotical: Famous pieces is the popular blog post by A. Karpathy and its many follow-ups.
+   - Anecdotical: Famous pieces is the popular blog post by A. Karpathy and its many follow-ups.
+   - Only recently have we started to see more thorough studies on the linguistic information encoded in RNNs
    #+END_NOTES
    #+attr_reveal: :frag (roll-in)
-   - Neurally generated text makes an authentic impression on readers.
-   - Basis for renewed interest in NLG.
+   - Neurally generated text makes an authentic impression on readers
+   - Basis for renewed interest in NLG
+   - Recent interest in the information encoded by RNNs
    
-   #+reveal: split
-   #+BEGIN_NOTES
-   - RNNs avoid the Markov assumption that constrains NGLMs to modelling very local contexts
-   - RNNs seem to encode much more linguistic information
-   #+END_NOTES
+   # #+reveal: split
+   # #+BEGIN_NOTES
+   # - RNNs avoid the Markov assumption that constrains NGLMs to modelling very local contexts
+   # - RNNs seem to encode much more linguistic information
+   # #+END_NOTES
    
-   #+attr_reveal: :frag (none roll-in)
-   - Hypothetically, this is due to its ability to model (very) long-term dependencies...
-   - ...which allows it to mimic certain properties of the training data.
+   # #+attr_reveal: :frag (roll-in)
+   # - Hypothetically, this is due to its ability to model (very) long-term dependencies...
+   # - ...which allows it to mimic certain properties of the training data.
 
 ** Evaluation of neural synthetic text through Authorship Attribution
 
    #+BEGIN_NOTES
+   For contrast, we wanted to study the potential of RNNs in comparison to traditional NGram models
    #+END_NOTES
    #+attr_reveal: :frag (roll-in)
-   - To what extent does the inferred generative distribution retain author-related stylistic properties of the empirical distribution?
+   - To what extent does the generative model retain author-related stylistic properties of the source?
    - How does it compare to traditional n-gram models?
 
 ** Experiment idea
@@ -56,7 +58,7 @@
    Very simple idea. Allows for many variations (evaluate different models, use different attributors)
    #+END_NOTES
    #+attr_reveal: :frag (roll-in)
-   - Fit LMs (one per author)
+   - Fit Language Models (one per author)
    - Generate a collection of docs per author through sampling
    - Apply AA to the resulting synthetic dataset
 
@@ -77,10 +79,9 @@
 * Summary of the presentation
 
   #+attr_reveal: :frag (roll-in)
-  - Describe the models used
-  - Describe the actual experimental setup and associated issues
-  - Discuss the results (with the help of some simple visualizations)
-  - Conclusion
+  - Describe the models used for generation
+  - Describe the experimental setup
+  - Discuss the results
 
 * Text Generation
 
@@ -110,28 +111,27 @@
 
 *** Multinomial sampling with temperature
     #+attr_reveal: :frag (roll-in)
-    - $w_1 \sim P(w|\text{<}bos\text{>})$
-    - $\Rightarrow w_1 = \{p_1, p_2, ..., p_v\}$
+    - $P(w|\text{<}bos\text{>}) = \{p_1, p_2, ..., p_v\}$
     - $p_i^{\tau} = \frac{p_i / \tau}{\sum_j^V p_j / \tau}$
 
-** NGLM
-   #+BEGIN_NOTES
-   Introduce Markov Assumption
-   #+END_NOTES
+** Models
+*** NGLM
+    #+BEGIN_NOTES
+    Introduce Markov Assumption
+    #+END_NOTES
 
-   $P(w_t|\ldots)$ @@html:<span class="fragment fade-in">@@ $\approx P(w_t|w_{t-(n+1)}, \ldots, w_{t-1})$ @@html:</span>@@
+    $P(w_t|\ldots)$ @@html:<span class="fragment fade-in">@@ $\approx P(w_t|w_{t-(n+1)}, \ldots, w_{t-1})$ @@html:</span>@@
 
-** RNNLM
+*** RNNLM
 
-   [[./img/rnnlm.svg]]
-
+    [[./img/rnnlm.svg]]
 
 * Experiment
 
 ** Experimental Setup
 
 *** Difficulties
-    #+attr_reveal: :frag (roll-in)
+
     Maximize comparability of authentic and generated text
     #+attr_reveal: :frag (roll-in)
     - Unequal training size per author for LMs
@@ -140,11 +140,9 @@
 
 *** Proposed method
     #+attr_reveal: :frag (roll-in)
-    Procedure to create maximally-comparable semi-authentic sets
-    #+attr_reveal: :frag (roll-in)
-    - Random even doc-level split (50%-50%)
-    - Create 20 fixed-size docs (5000 words) per split...  @@html:<span class="fragment">@@referred to as $\alpha$ and $\omega$ for simplicity@@html:</span>@@
-    - For each author, sample a third set ($\bar{\alpha}$) from the author's LM
+    - Random even doc-level split (referred to as $\alpha$ and $\omega$ for simplicity)
+    - Create 20 fixed-size (5000w) docs per split by sampling sentences
+    - Sample a third set ($\bar{\alpha}$) from the author's LMs trained on $\alpha$
 
 *** Attribution Experiments
     #+BEGIN_NOTES
@@ -160,7 +158,10 @@
 ** Dataset
 
    #+BEGIN_NOTES
-   We only used 18 * 100,000 * 2 (= 4M words)
+   - Most of the team members currently work on Latin
+   - Interesting baseline since Ecclesiastical Latin was mostly L2
+   - More space for developing authorial style (more interesting authorial patterns)
+   - Tematically, realatively homogeneous
    #+END_NOTES
    #+attr_reveal: :frag (roll-in)
    - Patrologia Latina (⩲ 113M words)
@@ -168,6 +169,9 @@
    - Homogeneous institutionalized literary language (L2 language)
    
    #+reveal: split
+   #+BEGIN_NOTES
+   - We only use those authors (18) for which we had enough data for our experiment
+   #+END_NOTES
    #+BEGIN_EXPORT html
    <img src="./img/author_words_docs.svg">
    #+END_EXPORT
@@ -244,12 +248,33 @@
     SVM uses very local features, NGLM reproduces very well the local distribution
 
     #+BEGIN_NOTES
-    - Use local information (ngrams) to visualize the difference between the learned distribution and the real generative distribution (we only have indirect access to these distributions through sampling).
+    Use local information (ngrams) to visualize the effect of local features on both models
     #+END_NOTES
   
     #+reveal: split
     #+BEGIN_NOTES
-    - clustering based on local features puts real and NGLM-generated text together
+    - Compute a similarity matrix of generated and real authors on the basis of ngrams (2-4)
+    - We use non-weighted Jaccard (intersection / union)
+    - We expect a certain overlap for any author, and less overlap across authors
+    #+END_NOTES
+    LEXICAL OVERLAP: Mean-normalized ngram Jaccard-similarity across authors.
+  
+    @@html:<span class="fragment fade-in"><strong>Character-level</strong><br/><img src="./img/jaccard_mean_char.svg"></span>@@
+  
+    # #+reveal: split
+    # #+BEGIN_NOTES
+    # - Interestingly, we obtain a very similar picture at a higher-level (word-level)
+    # #+END_NOTES
+    # LEXICAL OVERLAP: Mean-normalized Jaccard-similarity on author ngrams
+    
+    # @@html:<span class=""><p><strong>Word-level</strong></p><img src="./img/jaccard_mean.svg"></span>@@
+
+    #+reveal: split
+    #+BEGIN_NOTES
+    - For 3 authors, we take real and generated documents
+    - We represent the documents using 150 most frequente char ngrams
+    - Apply PCA to visualize the documents in space (for clustering)
+    - We observe that this representation based on local features puts real and NGLM-generated text together
     #+END_NOTES
     DOC-LEVEL PCA: *NGLM* (150 most-freq ngrams doc-representation)
     #+BEGIN_EXPORT html
@@ -258,30 +283,14 @@
   
     #+reveal: split
     #+BEGIN_NOTES
-    - clustering based on local features separates real and RNNLM-generated in some cases
+    - Clustering based on local features separates real and RNNLM-generated in some cases
     - Reveals certain fuzzyness in the RNNLM-generated text
     #+END_NOTES
     DOC-LEVEL PCA: *RNNLM* (150 most-freq ngrams doc-representation)
     #+BEGIN_EXPORT html
     <img src="./img/rnnlm_pca.svg">
     #+END_EXPORT
-  
-    #+reveal: split
-    #+BEGIN_NOTES
-    - jaccard: intersection / union
-    - very strong overlap on the features in the case of NGLM
-    #+END_NOTES
-    LEXICAL OVERLAP@@html:<span class="fragment fade-in">: Mean-normalized ngram Jaccard-similarity across authors.</span>@@
-  
-    @@html:<span class="fragment fade-in"><strong>Character-level</strong><br/><img src="./img/jaccard_mean_char.svg"></span>@@
-  
-    #+reveal: split
-    #+BEGIN_NOTES
-    - Interestingly, we obtain a very similar picture at a higher-level (word-level)
-    #+END_NOTES
-    LEXICAL OVERLAP: Mean-normalized Jaccard-similarity on author ngrams
-    
-    @@html:<span class="fragment fade-in"><p><strong>Word-level</strong></p><img src="./img/jaccard_mean.svg"></span>@@
+
 
 *** Why does NGLM outperforms Real setup in ($\omega$, $\alpha$)?
 
@@ -291,6 +300,7 @@
     #+attr_reveal: :frag (roll-in)
     - Prunning effect? Eliminating "distractive" features and enhancing those that are more relevant
     - It might prove beneficial for actual AA
+
    
 * Self-learning (Data-augmentation) Experiments
   #+BEGIN_NOTES
@@ -298,8 +308,10 @@
   #+END_NOTES
 
   #+attr_reveal: :frag (roll-in)
-  - Is there some authorial signal in the RNNLM-generated data?
-  - If so, augmenting the authentic training data with RNNLM-generated data _may_ yield attribution improvements
+  - Is there still some authorial signal in the RNNLM-generated data?
+  - Is there an effect of the long-term dependencies learned by the RNNLM on the stylistic properties of the generated data?
+  - If so, augmenting the authentic training data with RNNLM-generated data _could_ yield attribution improvements
+
 
 ** Experiment 
    #+BEGIN_NOTES
@@ -315,7 +327,7 @@
    - RNNLM increases (even over the <$\alpha, \omega$> baseline)
    - NGLM increases with respect to its baseline, but not over the real baseline
    #+END_NOTES
-   #+reveal: split
+
    # wrap to differentiate from other table
    #+BEGIN_EXPORT html
    <div id="table-full">
@@ -327,7 +339,7 @@
 
    #+reveal: split
    #+BEGIN_NOTES
-   - Effect seems to be skewing the f1 distribution towards the top 
+   - Effect seems to be skewing the f1 distribution towards the top
    - Rescueing some helplessly mislabeled authors (helping the attribution of some guys)
    #+END_NOTES
    
@@ -341,21 +353,21 @@
    To summarize the argument
    #+END_NOTES
    #+attr_reveal: :frag (roll-in)
-   -> The long-term dependencies prove beneficial (not redundant).
+   -> The long-term dependencies prove beneficial (not redundant)
    #+attr_reveal: :frag (roll-in)
-   -> (Evidence for) generative distribution being closer to the original distribution.
+   -> (Evidence for) RNNLM better modelling stylistic variation in the original distribution
    
 * Conclusion
 
   #+BEGIN_NOTES
   Shortcomings:
-  - Non-sequential attributor (very local context)
   - Grid-search instead of random-search
   - Further fine-tuning of the networks (pretraining + overfitting?)
   - More compact models (CLMs (VAEs), multiheaded, ...)
   #+END_NOTES
 
-  - LMs seem to capture stylistic properties to a certain extent.
-  - Although, stylistic evaluation still too local.
-  - RNNLMs seem to exploit (although very data hungry).
-  - Unexpected result: data-augmentation/self-learning with RNNLMs possibly beneficial.
+  - LMs seem to capture stylistic properties to a certain extent
+  - More global attributors still needed. Stylistic evaluation still too local
+  - Unexpected result: data-augmentation/self-learning with RNNLMs possibly beneficial
+
+* Thank you for your attention
